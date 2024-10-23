@@ -43,12 +43,11 @@ class Order(models.Model):
     Model for a Custom Order
     """
     quantity = models.IntegerField(default=1)
-    created_at = models.DateField()
-    updated_at = models.TimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
-    
-    def create(*args, **kwargs):
+    def __str__(self):
         """
-        method to create a new Order
+        Return a string representation of the order which includes the order id and the quantity.
         """
-        pass
+        return f"Order {self.id} - Quantity: {self.quantity}"
