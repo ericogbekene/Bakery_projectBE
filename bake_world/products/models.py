@@ -1,7 +1,9 @@
 from django.db import models
 from django.utils.text import slugify
 
+
 # Create your models here.
+
 
 class Category(models.Model):
     name = models.CharField(max_length=100)
@@ -14,6 +16,7 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+
 
 class Product(models.Model):
     """
@@ -29,7 +32,7 @@ class Product(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     category = models.ForeignKey(Category, related_name='products', on_delete=models.SET_NULL, null=True)
     image = models.ImageField(upload_to='products/', blank=True, null=True)
-    
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
@@ -37,17 +40,31 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
-    
+
+
 class Order(models.Model):
     """
     Model for a Custom Order
     """
+    products = models.ManyToManyField(Product, related_name='customer_orders')
     quantity = models.IntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     def __str__(self):
         """
         Return a string representation of the order which includes the order id and the quantity.
         """
         return f"Order {self.id} - Quantity: {self.quantity}"
+
+
+class OrderItem(models.Model):
+    """
+    Model for an Order Item
+    """
+    order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, related_name='order_items', on_delete=models.CASCADE)
+    quantity = models.IntegerField(default=1)
+
+    def __str__(self):
+        return f"{self.product.name} x {self.quantity}"

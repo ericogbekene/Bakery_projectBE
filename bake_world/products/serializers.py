@@ -1,40 +1,50 @@
-'''
-Insert serializers here
-'''
-from .models import Product, Category, Order
+from .models import Product, Category, Order, OrderItem
 from rest_framework import serializers
-
 
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
-        model = Category #NOT "Category"
+        model = Category
         fields = ["id", "name", "slug"]
+
 
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Product #NOT "Product"
+        model = Product
         fields = [
-            "name", "slug", "description", "price", "quantity", "available", "created_at", "updated_at", "category", "image"
+            "id", "name", "slug", "description", "price", "quantity", "available", "created_at", "updated_at", "category", "image"
         ]
-    
-    """ 
-    Method to create a new Product
-    """
-    def create(self, validated_data):
-        category_id = validated_data.pop('category_id', None)
-        if category_id:
-            try:
-                category = Category.objects.get(id=category_id)
-                product = Product.objects.create(category=category, **validated_data)
-            except Category.DoesNotExist:
-                raise serializers.ValidationError("Invalid category_id")
-        else:
-            product = Product.objects.create(**validated_data)
-        return product
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = ["id", "order", "product", "quantity"]
+
 
 class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+
     class Meta:
         model = Order
-        fields = ['id', 'quantity', 'created_at', 'updated_at']
-        
+        fields = ["id", "quantity", "created_at", "updated_at", "items"]
+
+
+class CreateOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = ["id", "quantity", "created_at", "updated_at"]
+
+    def create(self, validated_data):
+        order = Order.objects.create(**validated_data)
+        return order
+
+
+class CreateOrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = ["id", "order", "product", "quantity"]
+
+    def create(self, validated_data):
+        order_item = OrderItem.objects.create(**validated_data)
+        return order_item

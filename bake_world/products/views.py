@@ -1,8 +1,14 @@
 from django.shortcuts import render
 from django.http import HttpResponse
-from rest_framework import routers, serializers, viewsets
-from .models import Product, Category, Order
-from .serializers import ProductSerializer, CategorySerializer, OrderSerializer
+from rest_framework import  viewsets
+from .models import Product, Category, Order, OrderItem
+from .serializers import (ProductSerializer, 
+                          CategorySerializer, 
+                          OrderSerializer, 
+                          CreateOrderSerializer, 
+                          CreateOrderItemSerializer, 
+                          OrderItemSerializer
+)
 
 
 # Create your views here.
@@ -45,5 +51,21 @@ class OrderViewSet(viewsets.ModelViewSet):
     Order ViewSet
     """
     queryset = Order.objects.all()
-    serializer_class = OrderSerializer 
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return CreateOrderSerializer
+        return OrderSerializer
+
+
+class OrderItemViewSet(viewsets.ModelViewSet):
+    """
+    Order Item ViewSet
+    """
+    queryset = OrderItem.objects.all()
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return CreateOrderItemSerializer
+        return OrderItemSerializer
 
