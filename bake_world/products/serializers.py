@@ -1,7 +1,7 @@
 '''
 Insert serializers here
 '''
-from .models import Product, Category
+from .models import Product, Category, Order
 from rest_framework import serializers
 
 
@@ -32,3 +32,9 @@ class ProductSerializer(serializers.ModelSerializer):
         else:
             product = Product.objects.create(**validated_data)
         return product
+
+class OrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = ['id', 'quantity', 'created_at', 'updated_at']
+        
