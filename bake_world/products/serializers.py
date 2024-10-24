@@ -8,14 +8,14 @@ from rest_framework import serializers
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
-        model = 'Category'
+        model = Category #NOT "Category"
         fields = ["id", "name", "slug"]
 
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
-        model = 'Product'
+        model = Product #NOT "Product"
         fields = [
-            "name", "slug", "descrption", "price", "quantity", "available", "created_at", "updated_at", "category", "image"
+            "name", "slug", "description", "price", "quantity", "available", "created_at", "updated_at", "category", "image"
         ]
     
     """ 
