@@ -21,6 +21,13 @@ E.g
 
 """
 
+class CategoryViewSet(viewsets.ModelViewSet):
+    """
+    queryset 
+    """
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
 class ProductViewSet(viewsets.ModelViewSet):
     """
     queryset 
