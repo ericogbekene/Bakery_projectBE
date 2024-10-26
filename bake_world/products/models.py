@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.text import slugify
+from django.contrib.auth.models import User
 
 
 # Create your models here.
@@ -68,3 +69,14 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
+
+class Cart(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Cart for {self.user.username}"
+
+    def total_price(self):
+        return sum(item.total_price() for item in self.items.all())
