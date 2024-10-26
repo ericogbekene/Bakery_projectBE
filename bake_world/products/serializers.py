@@ -47,4 +47,4 @@ class CreateOrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = ["id", "order", "product", "quantity"]
 
-
+    

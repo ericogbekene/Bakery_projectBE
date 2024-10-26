@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import HttpResponse
 from rest_framework import  viewsets
-from .models import Product, Category, Order, OrderItem
+from .models import Product, Category, Order, OrderItem, Cart, CartItem
 from .serializers import (ProductSerializer, 
                           CategorySerializer, 
                           OrderSerializer, 
@@ -68,4 +68,7 @@ class OrderItemViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return CreateOrderItemSerializer
         return OrderItemSerializer
+
+
+
 
