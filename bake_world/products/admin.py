@@ -12,11 +12,11 @@ class CartItemInline(admin.TabularInline):
 
 class OrderAdmin(admin.ModelAdmin): 
     inlines = [OrderItemInline]
-    list_display = ('id', 'user', 'quantity', 'created_at', 'updated_at')
+    list_display = ('id', 'quantity', 'created_at', 'updated_at')
 
 class CartAdmin(admin.ModelAdmin):
     inlines = [CartItemInline]
-    list_display = ('id', 'user', 'created_at', 'updated_at')
+    list_display = ('id', 'created_at', 'updated_at')
 
 admin.site.register(Order, OrderAdmin)
 admin.site.register(Cart, CartAdmin)
@@ -25,6 +25,5 @@ admin.site.register(CartItem)
 
 admin.site.register(Product)
 admin.site.register(Category)
-admin.site.register(Order)
 
 # Register your models here.
