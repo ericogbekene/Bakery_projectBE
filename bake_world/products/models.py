@@ -40,6 +40,10 @@ class Product(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
+        
+        """
+        Return a string representation of the product which includes the product name.
+        """
         return self.name
 
 
