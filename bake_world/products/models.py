@@ -32,7 +32,7 @@ class Product(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     category = models.ForeignKey(Category, related_name='products', on_delete=models.SET_NULL, null=True)
-    image = models.ImageField(upload_to='products/', blank=True, null=True)
+    image = models.ImageField(upload_to='products/product-image', blank=True, null=True)
 
     def save(self, *args, **kwargs):
         if not self.slug:
