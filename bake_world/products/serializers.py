@@ -1,4 +1,4 @@
-from .models import Product, Category, Order, OrderItem
+from .models import Product, Category, Order, OrderItem, Cart, CartItem
 from rest_framework import serializers
 
 
@@ -47,4 +47,18 @@ class CreateOrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = ["id", "order", "product", "quantity"]
 
-
+class CreateCartSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Cart model
+    """
+    
+    class Meta:
+        model = Cart
+        fields = ["id", "user", "created_at", "updated_at"]
+        
+class CreateCartItemSerializer(serializers.ModelSerializer):
+    """
+    a Serializer for CartItem Model
+    """
+    model = CartItem
+    fields = ["id", "cart", "product", "quantity"]
