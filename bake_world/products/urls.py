@@ -8,6 +8,8 @@ router.register(r'products', views.ProductViewSet, basename='products')
 router.register(r'categories', views.CategoryViewSet, basename='categories')
 router.register(r'orders', views.OrderViewSet, basename='orders')
 router.register(r'order-items', views.OrderItemViewSet, basename='order-items')
+router.register(r'carts', views.CartViewSet, basename='carts')
+router.register(r'cart-items', views.CartItemViewSet, basename='cart-items')
 
 
 

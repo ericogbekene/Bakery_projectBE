@@ -43,22 +43,17 @@ class CreateOrderSerializer(serializers.ModelSerializer):
 class CreateOrderItemSerializer(serializers.ModelSerializer):
     order = serializers.StringRelatedField()
     product = serializers.StringRelatedField()
+
     class Meta:
         model = OrderItem
         fields = ["id", "order", "product", "quantity"]
 
 class CreateCartSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Cart model
-    """
-    
     class Meta:
         model = Cart
-        fields = ["id", "user", "created_at", "updated_at"]
-        
+        fields = ['user', 'created_at', 'updated_at']
+
 class CreateCartItemSerializer(serializers.ModelSerializer):
-    """
-    a Serializer for CartItem Model
-    """
-    model = CartItem
-    fields = ["id", "cart", "product", "quantity"]
+    class Meta:
+        model = CartItem
+        fields = ['id','cart', 'product', 'quantity']
