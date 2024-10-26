@@ -79,4 +79,31 @@ class Cart(models.Model):
         return f"Cart for {self.user.username}"
 
     def total_price(self):
+        """
+        Calculate the total price of all items in the cart.
+
+        Returns:
+            Decimal: The total price of all items in the cart.
+        """
         return sum(item.total_price() for item in self.items.all())
+
+class CartItem(models.Model):
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.IntegerField(default=1)
+
+    def __str__(self):
+        
+        """
+        Return a string representation of the cart item, indicating the quantity and product name.
+        """
+        return f"{self.quantity} of {self.product.name} in car"
+
+    def total_price(self):
+        """
+            Calculate the total price for the cart item based on its quantity and product price.
+
+            Returns:
+                Decimal: The total price for the cart item.
+        """
+        return self.quantity * self.product.price
