@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.http import HttpResponse
 from rest_framework import  viewsets
 from .models import Product, Category, Order, OrderItem, Cart, CartItem
@@ -17,10 +17,6 @@ from .serializers import (ProductSerializer,
 )
 
 
-# Create your views here.
-
-def products(request):
-    return HttpResponse("Hello world!")
 
 
 # Create Viewsets for pages here
@@ -47,9 +43,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         Filter products by category
         """
         category_slug = self.request.query_params.get('category_slug')
+        
         if category_slug:
             return Product.objects.filter(category__slug=category_slug)
-        return Product.objects.all()
+        return super().get_queryset()
+
 
 
 class OrderViewSet(viewsets.ModelViewSet):
