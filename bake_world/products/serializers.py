@@ -1,4 +1,4 @@
-from .models import Product, Category, Order, OrderItem, Cart, CartItem
+from .models import Product, Category
 from rest_framework import serializers
 
 
@@ -14,46 +14,3 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "slug", "description", "price", "available", "created_at", "updated_at", "category", "image"
         ]
-
-
-class OrderItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = OrderItem
-        fields = ["id", "order", "product", "quantity"]
-
-
-class OrderSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Order
-        fields = ["id", "quantity", "created_at", "updated_at", "items"]
-
-
-class CreateOrderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Order
-        fields = ["id", "quantity", "created_at", "updated_at"]
-
-    def create(self, validated_data):
-        order = Order.objects.create(**validated_data)
-        return order
-
-
-class CreateOrderItemSerializer(serializers.ModelSerializer):
-    order = serializers.StringRelatedField()
-    product = serializers.StringRelatedField()
-
-    class Meta:
-        model = OrderItem
-        fields = ["id", "order", "product", "quantity"]
-
-class CreateCartSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Cart
-        fields = ['user', 'created_at', 'updated_at']
-
-class CreateCartItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CartItem
-        fields = ['id','cart', 'product', 'quantity']

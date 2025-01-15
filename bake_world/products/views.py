@@ -1,20 +1,10 @@
 from django.shortcuts import get_object_or_404, render
 from django.http import HttpResponse
 from rest_framework import  viewsets
-from .models import Product, Category, Order, OrderItem, Cart, CartItem
+from .models import Product, Category
 from .serializers import (ProductSerializer, 
                           CategorySerializer, 
-                          OrderSerializer, 
-                          CreateOrderSerializer, 
-                          CreateOrderItemSerializer, 
-                          OrderItemSerializer,
-                          CreateCartSerializer,
-                          CreateCartItemSerializer
-                          
-                          
-                          
-                    
-)
+                          )
 
 
 
@@ -47,43 +37,3 @@ class ProductViewSet(viewsets.ModelViewSet):
         if category_slug:
             return Product.objects.filter(category__slug=category_slug)
         return super().get_queryset()
-
-
-
-class OrderViewSet(viewsets.ModelViewSet):
-    """
-    Order ViewSet
-    """
-    queryset = Order.objects.all()
-
-    def get_serializer_class(self):
-        if self.action == 'create':
-            return CreateOrderSerializer
-        return OrderSerializer
-
-
-class OrderItemViewSet(viewsets.ModelViewSet):
-    """
-    Order Item ViewSet
-    """
-    queryset = OrderItem.objects.all()
-
-    def get_serializer_class(self):
-        if self.action == 'create':
-            return CreateOrderItemSerializer
-        return OrderItemSerializer
-
-
-class CartViewSet(viewsets.ModelViewSet):
-    """
-    Cart ViewSet
-    """
-    queryset = Cart.objects.all()
-    serializer_class = CreateCartSerializer
-    
-class CartItemViewSet(viewsets.ModelViewSet):
-    """
-    Cart Item ViewSet
-    """
-    queryset = CartItem.objects.all()
-    serializer_class = CreateCartItemSerializer

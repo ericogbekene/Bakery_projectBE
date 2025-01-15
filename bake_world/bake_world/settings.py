@@ -13,9 +13,7 @@ SECRET_KEY = 'django-insecure-sp*00c$ma)_z2c2nq4qyml&)3piuni@t+mo%c)r4b83ubs&%+3
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    'bakery-projectbe.onrender.com'
-]
+ALLOWED_HOSTS = []
 
 
 # Application definition
@@ -35,7 +33,8 @@ INSTALLED_APPS = [
 
     'products.apps.ProductsConfig',
 
-    'cart.apps.CartConfig'
+    'cart.apps.CartConfig',
+    'orders.apps.OrdersConfig',
     
 ]
 
