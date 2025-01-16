@@ -30,6 +30,7 @@ from django.urls import include, path
 urlpatterns = [
     path('api/', include('products.urls')),
     path('api/cart/', include('cart.urls')),
+    path('api/orders/', include('orders.urls')),
     path('admin/', admin.site.urls),
 
     # swagger Docs Routers
