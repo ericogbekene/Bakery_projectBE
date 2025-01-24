@@ -1,3 +1,4 @@
+from decouple import config
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -127,3 +128,5 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # CREATING SHOPPING CART SESSION
 CART_SESSION_ID = 'cart'
+
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

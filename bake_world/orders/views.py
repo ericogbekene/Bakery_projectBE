@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from cart.cart import Cart
 from .models import Order, OrderItem
 from .serializers import OrderCreateSerializer
+from .tasks import order_created
 
 
 class OrderViewSet(viewsets.ViewSet):
@@ -16,6 +17,11 @@ class OrderViewSet(viewsets.ViewSet):
         """
         cart = Cart(request)  # Initialize the cart
         serializer = OrderCreateSerializer(data=request.data)
+
+        if request.method == 'POST':
+            if serializer.is_valid():
+                cart.clear()
+                order_created.delay(order.id)
 
         if serializer.is_valid():
             # Save the order instance
@@ -45,4 +51,5 @@ class OrderViewSet(viewsets.ViewSet):
         # Return a validation error response
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    
+
+

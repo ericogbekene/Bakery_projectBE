@@ -38,6 +38,9 @@ class Cart:
     def save(self):
         # maeked the session as "modified" to make sure it get saved
 
+        """
+        Mark the session as modified to make sure it gets saved
+        """
         self.session.modified = True
     
     def remove(self, product):
