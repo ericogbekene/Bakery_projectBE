@@ -32,10 +32,14 @@ INSTALLED_APPS = [
     
     'rest_framework',
 
+    # LOCAL APP
+
     'products.apps.ProductsConfig',
 
     'cart.apps.CartConfig',
     'orders.apps.OrdersConfig',
+
+    'payments.apps.PaymentsConfig',
     
 ]
 
@@ -130,3 +134,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 CART_SESSION_ID = 'cart'
 
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# PAYMENT GATEWAY SETUP
+#PAYSTACK_PUBLIC_KEY = config('STRIPE_PUBLIC_KEY')
+#PAYSTACK_SECRET_KEY = config('STRIPE_SECRET_KEY')
+#PAYSTACK_API_VERSION = '2025-01-24'
