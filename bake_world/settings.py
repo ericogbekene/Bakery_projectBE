@@ -16,7 +16,12 @@ SECRET_KEY = 'django-insecure-sp*00c$ma)_z2c2nq4qyml&)3piuni@t+mo%c)r4b83ubs&%+3
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['https://bakery-projectbe-6q46.onrender.com/', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    'bakery-projectbe-6q46.onrender.com'
+]
+
 
 
 # Application definition
