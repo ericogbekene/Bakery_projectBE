@@ -1,7 +1,6 @@
-from rest_framework.routers import DefaultRouter
-from .views import OrderViewSet
+from django.urls import path
+from . import views
 
-router = DefaultRouter()
-router.register(r'orders', OrderViewSet, basename='order')
-
-urlpatterns = router.urls
+urlpatterns = [
+    path('payment/process/', views.PaymentProcessView.as_view(), name='payment_process'),
+]

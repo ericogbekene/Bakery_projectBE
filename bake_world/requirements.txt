@@ -1,4 +1,5 @@
 amqp==5.3.1
+anyio==4.8.0
 asgiref==3.8.1
 billiard==4.2.1
 celery==5.4.0
@@ -20,6 +21,9 @@ djangorestframework_simplejwt==5.4.0
 drf-yasg==1.21.8
 flower==2.0.1
 forex-python==1.8
+h11==0.14.0
+httpcore==1.0.7
+httpx==0.28.1
 humanize==4.11.0
 idna==3.10
 inflection==0.5.1
@@ -36,6 +40,7 @@ prompt_toolkit==3.0.48
 psycopg2-binary==2.9.10
 PyJWT==2.10.1
 pypaystack==1.24
+pypaystack2==2.1.1
 python-dateutil==2.9.0.post0
 python-decouple==3.8
 python_paystack==1.2.0
@@ -45,6 +50,7 @@ requests==2.32.3
 setuptools==75.8.0
 simplejson==3.19.3
 six==1.17.0
+sniffio==1.3.1
 sqlparse==0.5.3
 tornado==6.4.2
 typing_extensions==4.12.2
