@@ -1,0 +1,22 @@
+databases:
+  - name: bakerdb
+    plan: free
+    databaseName: bakerdb
+    user: baker
+
+services:
+  - type: web
+    plan: free
+    name: baker
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "python -m gunicorn bake_world.asgi:application -k uvicorn.workers.UvicornWorker"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bakerdb
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEB_CONCURRENCY
+        value: 4
