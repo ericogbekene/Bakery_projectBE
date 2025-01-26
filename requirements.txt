@@ -47,7 +47,7 @@ python-decouple==3.8
 python_paystack==1.2.0
 pytz==2024.2
 PyYAML==6.0.2
-requests==2.32.3
+# requests==2.32.3
 setuptools==75.8.0
 simplejson==3.19.3
 six==1.17.0
