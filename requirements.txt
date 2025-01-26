@@ -22,6 +22,7 @@ djangorestframework_simplejwt==5.4.0
 drf-yasg==1.21.8
 flower==2.0.1
 forex-python==1.8
+gunicorn==23.0.0
 h11==0.14.0
 httpcore==1.0.7
 httpx==0.28.1
