@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "1d4f482f7603a98974e9a863cbd4055f072c8b7745553530fa516246997423cc"
+            "sha256": "0cc8b20ec69ad02fc2882af9b7997b78e292c87fbf725aef7935973b4baf4e53"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -438,6 +438,15 @@
             "index": "pypi",
             "version": "==1.8"
         },
+        "gunicorn": {
+            "hashes": [
+                "sha256:ec400d38950de4dfd418cff8328b2c8faed0edb0d517d3394e457c317908ca4d",
+                "sha256:f014447a0101dc57e294f6c18ca6b40227a4c90e9bdb586042628030cba004ec"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.7'",
+            "version": "==23.0.0"
+        },
         "h11": {
             "hashes": [
                 "sha256:8f19fbbe99e72420ff35c00b27a34cb9937e902a8b810e2c88300c6f0a3b699d",
@@ -791,29 +800,13 @@
             "markers": "python_version >= '3.9'",
             "version": "==2.10.1"
         },
-        "pypaystack": {
-            "hashes": [
-                "sha256:80dacc224fa778177ab779e8299f789a55f945cd69b46920eafd92c4e9b0dfd8"
-            ],
-            "index": "pypi",
-            "version": "==1.24"
-        },
-        "pypaystack2": {
-            "hashes": [
-                "sha256:bda816e73c1f0d82c8314b73383c075c564ff496b189e94544ff1a5b9d72f50e",
-                "sha256:d076cad28109fc76935cccc680a565dfb60e41e8c5bfd79b604773cace17b463"
-            ],
-            "index": "pypi",
-            "markers": "python_version >= '3.9'",
-            "version": "==2.1.1"
-        },
         "python-dateutil": {
             "hashes": [
                 "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3",
                 "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427"
             ],
             "index": "pypi",
-            "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2'",
+            "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'",
             "version": "==2.9.0.post0"
         },
         "python-decouple": {
@@ -823,13 +816,6 @@
             ],
             "index": "pypi",
             "version": "==3.8"
-        },
-        "python-paystack": {
-            "hashes": [
-                "sha256:233abb23cb16c014cba01a8cce21fa5de5116026e003f317889742a7a39e9e60"
-            ],
-            "index": "pypi",
-            "version": "==1.2.0"
         },
         "pytz": {
             "hashes": [
@@ -1022,7 +1008,7 @@
                 "sha256:ff7bc1bbdaa3e487c9469128bf39408e91f5573901cb852e03af378d3582c52d"
             ],
             "index": "pypi",
-            "markers": "python_version >= '2.5' and python_version not in '3.0, 3.1, 3.2'",
+            "markers": "python_version >= '2.5' and python_version not in '3.0, 3.1, 3.2, 3.3'",
             "version": "==3.19.3"
         },
         "six": {
@@ -1031,7 +1017,7 @@
                 "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"
             ],
             "index": "pypi",
-            "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2'",
+            "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'",
             "version": "==1.17.0"
         },
         "sniffio": {
@@ -1105,6 +1091,15 @@
             "index": "pypi",
             "markers": "python_version >= '3.9'",
             "version": "==2.3.0"
+        },
+        "uvicorn": {
+            "hashes": [
+                "sha256:023dc038422502fa28a09c7a30bf2b6991512da7dcdb8fd35fe57cfc154126f4",
+                "sha256:404051050cd7e905de2c9a7e61790943440b3416f49cb409f965d9dcd0fa73e9"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.9'",
+            "version": "==0.34.0"
         },
         "validators": {
             "hashes": [
