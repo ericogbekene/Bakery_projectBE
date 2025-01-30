@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/', include('products.urls')),
     path('api/cart/', include('cart.urls')),
     path('api/orders/', include('orders.urls')),
+    path("", include("payment.urls")),
     path('admin/', admin.site.urls),
 
     # swagger Docs Routers
