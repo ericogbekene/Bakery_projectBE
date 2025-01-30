@@ -1,70 +1,90 @@
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.db import transaction
 from cart.cart import Cart
-from .serializers import OrderCreateSerializer
+from .serializers import OrderCreateSerializer, OrderSerializer
 from .tasks import order_created
 from .models import Order, OrderItem
-
-
+from products.models import Product  
 
 class OrderView(APIView):
     """
     A view for handling order creation and related operations.
     """
 
+    @transaction.atomic
     def post(self, request):
         """
-        Handle POST request to create an order. This will create an instance of 
-        Order and OrderItem models. It will also clear the cart and trigger celery 
-        task to send an email notification.
+        Handle POST request to create an order.
+        Creates Order and OrderItem instances, clears the cart, and triggers a Celery task.
         """
         cart = Cart(request)
-        serializer = OrderCreateSerializer(data=request.POST)
+
+        if not cart:
+            return Response({"error": "Your cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = OrderCreateSerializer(data=request.data)
         if serializer.is_valid():
-            order = serializer.save()
-            OrderItem.objects.bulk_create([
-                OrderItem(
-                    order=order,
-                    product=item['product'],
-                    price=item['price'],
-                    quantity=item['quantity']
-                ) for item in cart
-            ])
+            # Allow guest checkout if user is not authenticated
+            user = request.user if request.user.is_authenticated else None
+            order = serializer.save(user=user)
+
+            order_items = []
+            for item in cart:
+                try:
+                    product = Product.objects.get(id=item['product_id'])  # Ensure valid product
+                    order_items.append(
+                        OrderItem(
+                            order=order,
+                            product=product,
+                            price=item['price'],
+                            quantity=item['quantity']
+                        )
+                    )
+                except Product.DoesNotExist:
+                    return Response({"error": f"Product with ID {item['product_id']} not found"},
+                                    status=status.HTTP_400_BAD_REQUEST)
+
+            # Bulk insert order items
+            OrderItem.objects.bulk_create(order_items)
+
+            # Automatically update the total cost
+            order.update_total_cost()
+
+            # Clear the cart after successful order
             cart.clear()
+
+            # Send email notification via Celery
             order_created.delay(order.id)
+
+            # Store order ID in session for payment processing
             request.session['order_id'] = order.id
-            # Redirect to payment process
-            return redirect(reverse('payment_process'))
+
+            payment_url = reverse('payment_process')
+            return Response({"message": "Order created successfully", "payment_url": payment_url},
+                            status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class OrderDetailView(APIView):
+    """
+    Retrieves order details.
+    """
 
+    def get(self, request, order_id):
+        """
+        Retrieves an order by its ID.
 
-from django.views.generic import View
+        Args:
+            order_id (int): The ID of the order to retrieve.
 
-class PaymentProcessView(View):
-    def get(self, request):
-        # Create a Paystack checkout session
-        checkout_session = Checkout.create(
-            {
-                "amount": 10000,
-                "currency": "NGN",
-                "customer": {
-                    "email": "customer@example.com",
-                    "first_name": "John",
-                    "last_name": "Doe",
-                },
-                "metadata": {
-                    "order_id": "12345",
-                    "customer_id": "67890",
-                },
-                "callback_url": reverse("payment_completed"),
-                "cancel_url": reverse("payment_canceled"),
-            }
-        )
-
-        # Redirect the client to the Paystack-hosted payment form
-        return redirect(checkout_session.url)
+        Returns:
+            Response: A Response object containing the serialized order data.
+        """
+        order = get_object_or_404(Order, id=order_id)
+        serializer = OrderSerializer(order)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -1,6 +1,7 @@
 from django.urls import path
-from . import views
+from .views import OrderView, OrderDetailView
 
 urlpatterns = [
-    path('payment/process/', views.PaymentProcessView.as_view(), name='payment_process'),
+    path('create/', OrderView.as_view(), name='create_order'),
+    path('<int:order_id>/', OrderDetailView.as_view(), name='order_detail'),  # View order summary
 ]

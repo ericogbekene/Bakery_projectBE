@@ -3,44 +3,46 @@ from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from orders.models import Order  # Import Order model
 from .models import Transaction
 from .serializers import TransactionSerializer
-
 from decouple import config
-from django.conf import settings
-
 
 
 class InitializePayment(APIView):
     """
-    This is the view that handles the payment process. It takes a POST request with
-    the following parameters:
-    - email: the email of the user
-    - amount: the amount of the transaction in NGN
-    - reference: a unique reference for the transaction
+    Initializes a Paystack payment and stores transaction details in the database.
     """
-    
+
     def post(self, request):
         email = request.data.get('email')
         amount = request.data.get('amount')
-        
+        order_id = request.data.get('order_id')  # Get Order ID from request
+
+        try:
+            order = Order.objects.get(id=order_id, paid=False)  # Ensure order exists & is unpaid
+        except Order.DoesNotExist:
+            return Response({"error": "Order not found or already paid"}, status=status.HTTP_400_BAD_REQUEST)
+
         url = 'https://api.paystack.co/transaction/initialize'
         headers = {
-            'Authorization': f'Bearer {settings.PAYSTACK_SECRET_KEY}',
-            'Content-Type': 'application/json',   
+            'Authorization': f'Bearer {config("PAYSTACK_SECRET_KEY")}',  # Use env variable
+            'Content-Type': 'application/json',
         }
         data = {
             'email': email,
-            'amount': amount
+            'amount': int(amount * 100),  # Convert NGN to kobo
+            'reference': f"ORD-{order.id}-{order.created.strftime('%Y%m%d%H%M%S')}",  # Unique reference
+           # 'callback_url': f"{settings.FRONTEND_URL}/payment/callback/",
         }
-        
+
         response = requests.post(url, headers=headers, json=data)
         response_data = response.json()
-        
+
         if response_data['status']:
-            # save transaction details to the database
-            
+            # Save transaction details in database
             transaction = Transaction.objects.create(
+                order=order,
                 email=email,
                 amount=amount,
                 reference=response_data['data']['reference'],
@@ -51,36 +53,69 @@ class InitializePayment(APIView):
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
 
 
-
-
 class VerifyPayment(APIView):
     """
-    This is the view that handles the verification of a payment. It takes a POST request with
-    the following parameters:
-    - self: the view class
-    - request: the request object
-    - reference: a unique reference for the transaction
+    Verifies a payment via Paystack and updates order status if successful.
     """
-    
+
     def get(self, request, reference):
         url = f'https://api.paystack.co/transaction/verify/{reference}'
         headers = {
-            'Authorization': f'Bearer {settings.PAYSTACK_SECRET_KEY}',
-            
+            'Authorization': f'Bearer {config("PAYSTACK_SECRET_KEY")}',
         }
-        
+
         response = requests.get(url, headers=headers)
         response_data = response.json()
-        
+
         if response_data['status'] and response_data['data']['status'] == 'success':
-            
-            # Update transaction status in the database
-            
-            transaction = Transaction.objects.get(reference=reference)
+            try:
+                transaction = Transaction.objects.get(reference=reference)
+            except Transaction.DoesNotExist:
+                return Response({"error": "Transaction not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            # Update transaction and order status
             transaction.status = 'success'
             transaction.save()
-            
+
+            order = transaction.order
+            order.paid = True
+            order.save()
+
             serializer = TransactionSerializer(transaction)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response({"message": "Payment verified successfully", "transaction": serializer.data},
+                            status=status.HTTP_200_OK)
         else:
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RefundTransaction(APIView):
+    """
+    Processes refunds for failed transactions.
+    """
+
+    def post(self, request, reference):
+        try:
+            transaction = Transaction.objects.get(reference=reference)
+            if transaction.status != "failed":
+                return Response({"error": "Only failed transactions can be refunded"},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            url = f"https://api.paystack.co/refund"
+            headers = {
+                "Authorization": f"Bearer {config('PAYSTACK_SECRET_KEY')}",
+                "Content-Type": "application/json",
+            }
+            data = {"transaction": reference}
+
+            response = requests.post(url, headers=headers, json=data)
+            res_data = response.json()
+
+            if res_data.get("status"):
+                transaction.status = "refunded"
+                transaction.save()
+                return Response({"message": "Refund processed successfully"}, status=status.HTTP_200_OK)
+            else:
+                return Response(res_data, status=status.HTTP_400_BAD_REQUEST)
+
+        except Transaction.DoesNotExist:
+            return Response({"error": "Transaction not found"}, status=status.HTTP_404_NOT_FOUND)
