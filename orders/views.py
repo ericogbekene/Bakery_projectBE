@@ -1,14 +1,15 @@
 from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import redirect
 from django.urls import reverse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from cart.cart import Cart
-from .serializers import OrderCreateSerializer, OrderSerializer
+from .serializers import OrderCreateSerializer, OrderSerializer, OrderItemSerializer
 from .tasks import order_created
 from .models import Order, OrderItem
-from products.models import Product  
+from products .models import Product
 
 class OrderView(APIView):
     """
@@ -18,8 +19,9 @@ class OrderView(APIView):
     @transaction.atomic
     def post(self, request):
         """
-        Handle POST request to create an order.
-        Creates Order and OrderItem instances, clears the cart, and triggers a Celery task.
+        Handle POST request to create an order. This will create instances of
+        Order and OrderItem models, clear the cart, and trigger a Celery task
+        to send an email notification.
         """
         cart = Cart(request)
 
@@ -28,44 +30,32 @@ class OrderView(APIView):
 
         serializer = OrderCreateSerializer(data=request.data)
         if serializer.is_valid():
-            # Allow guest checkout if user is not authenticated
-            user = request.user if request.user.is_authenticated else None
-            order = serializer.save(user=user)
+            order = serializer.save()
 
-            order_items = []
-            for item in cart:
-                try:
-                    product = Product.objects.get(id=item['product_id'])  # Ensure valid product
-                    order_items.append(
-                        OrderItem(
-                            order=order,
-                            product=product,
-                            price=item['price'],
-                            quantity=item['quantity']
-                        )
-                    )
-                except Product.DoesNotExist:
-                    return Response({"error": f"Product with ID {item['product_id']} not found"},
-                                    status=status.HTTP_400_BAD_REQUEST)
+            # Retrieve Product instances from the database in bulk
+            product_ids = [item['product']['id'] for item in cart]
+            products = Product.objects.in_bulk(product_ids)
 
-            # Bulk insert order items
+            order_items = [
+                OrderItem(
+                    order=order,
+                    product=products[item['product']['id']],
+                    price=item['price'],
+                    quantity=item['quantity']
+                ) for item in cart
+            ]
             OrderItem.objects.bulk_create(order_items)
 
-            # Automatically update the total cost
-            order.update_total_cost()
+            # Calculate and update the total cost
+            total_cost = sum(item.get_cost() for item in order_items)
+            order.total_cost = total_cost
+            order.save()
 
-            # Clear the cart after successful order
             cart.clear()
-
-            # Send email notification via Celery
             order_created.delay(order.id)
-
-            # Store order ID in session for payment processing
             request.session['order_id'] = order.id
 
-            payment_url = reverse('payment_process')
-            return Response({"message": "Order created successfully", "payment_url": payment_url},
-                            status=status.HTTP_201_CREATED)
+            return Response({"message": "Order created successfully"}, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

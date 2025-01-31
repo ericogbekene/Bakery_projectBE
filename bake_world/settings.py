@@ -79,6 +79,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'cart.context_processors.cart',
             ],
         },
     },
@@ -169,5 +170,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 #PAYSTACK_API_VERSION = '2025-01-24'
 
 
-PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY')
-PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY')
+try:
+    PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY')
+    PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY')
+except Exception as e:
+    print("Error loading Paystack keys:", e)

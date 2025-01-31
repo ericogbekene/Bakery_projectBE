@@ -1,8 +1,9 @@
 from rest_framework import serializers
 from .models import Order, OrderItem
 
+
 class OrderCreateSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(max_length=254)
+    email = serializers.EmailField(max_length=254, required=True)
 
     class Meta:
         model = Order
@@ -38,6 +39,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def validate_address(self, value):
         if len(value) < 5:
             raise serializers.ValidationError("Address must be at least 5 characters long.")
+        return value
+
+    def validate_email(self, value):
+        if not value:
+            raise serializers.ValidationError("Email is required.")
         return value
 
     def create(self, validated_data):
@@ -76,8 +82,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
-
-
 
 class OrderItemSerializer(serializers.ModelSerializer):
     """
