@@ -8,7 +8,7 @@ pip install -r requirements.txt
 # Convert static asset files
 python manage.py collectstatic --no-input
 
-# Creating Supper user on Render
+
 
 if [[ $CREATE_SUPERUSER ]];
 then
