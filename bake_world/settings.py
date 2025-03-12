@@ -1,8 +1,15 @@
-from decouple import config
 from pathlib import Path
-import dj_database_url
 import os
+import dj_database_url
 from decouple import config
+
+# # Add this to check if the config function is working
+# try:
+#     test_var = config('SECRET_KEY', default='ENV_NOT_WORKING')
+#     print(f"Config function is working. SECRET_KEY starts with: {test_var[:5]}...")
+# except Exception as e:
+#     print(f"Error with config function: {e}")
+
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -91,21 +98,33 @@ WSGI_APPLICATION = 'bake_world.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
- }
-
 # DATABASES = {
-  #  'default': dj_database_url.config(
-   #     # Replace this value with your local database's connection string.
-    #    default='postgresql://postgres:postgres@localhost:5432/bake_world',
-     #   conn_max_age=600
-   # )
-# }
+  #  'default': {
+   #     'ENGINE': 'django.db.backends.sqlite3',
+    #    'NAME': BASE_DIR / 'db.sqlite3',
+   # }
+ # }
 
+# Check if we're running on Render (production)
+IS_RENDER = config('IS_RENDER', default=False, cast=bool)
+
+# Database configuration based on environment
+if IS_RENDER:
+    # Use Render PostgreSQL database in production
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=config('DATABASE_URL'),
+            conn_max_age=600
+        )
+    }
+else:
+    # Use SQLite for local development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 
