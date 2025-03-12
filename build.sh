@@ -16,3 +16,5 @@ fi
 
 # Apply any outstanding database migrations
 python manage.py migrate
+
+# Collect static files
