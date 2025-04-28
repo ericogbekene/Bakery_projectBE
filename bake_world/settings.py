@@ -28,7 +28,9 @@ DEBUG = True
 ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
-    'bakery-projectbe-6q46.onrender.com'
+    '68.183.152.209',
+    'bakery-projectbe-6q46.onrender.com',
+    'baker-production.up.railway.app/'
 ]
 
 
