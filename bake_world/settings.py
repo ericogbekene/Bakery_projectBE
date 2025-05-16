@@ -39,9 +39,10 @@ ALLOWED_HOSTS = [
         'baker-production.up.railway.app',
         'https://baker-production.up.railway.app',
         'http://baker-production.up.railway.app',
+        'https://baker-production.up.railway.app:3000',
+        'http://baker-production.up.railway.app:3000',
+        'http://localhost:3000',
         ]
-
-
 
 # Application definition
 
