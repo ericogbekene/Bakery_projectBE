@@ -3,13 +3,11 @@ import os
 import dj_database_url
 from decouple import config
 
-# Base directory
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Secret key & debug flag
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = True
-#DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG=config('DEBUG', default=False, cast=bool)
 
 # Production flag
 IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
