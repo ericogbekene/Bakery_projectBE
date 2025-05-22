@@ -10,17 +10,7 @@ class Category(models.Model):
     """Model representing a product category."""
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=200, unique=True)
-    # SEO fields
-    meta_description = models.CharField(
-        max_length=200, 
-        blank=True, 
-        help_text="SEO meta description (max 160 characters)"
-    )
-    meta_keywords = models.CharField(
-        max_length=200, 
-        blank=True, 
-        help_text="SEO keywords separated by commas"
-    )
+    
     
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -88,17 +78,7 @@ class Product(models.Model):
         null=True
     )
     description = models.TextField(blank=True, null=True)
-    # SEO fields
-    meta_description = models.CharField(
-        max_length=160, 
-        blank=True, 
-        help_text="SEO meta description (max 160 characters)"
-    )
-    meta_keywords = models.CharField(
-        max_length=255, 
-        blank=True, 
-        help_text="SEO keywords separated by commas"
-    )
+    
     # Price with validation
     price = models.DecimalField(
         max_digits=10, 

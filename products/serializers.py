@@ -25,7 +25,7 @@ class CategoryDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = [
-            'id', 'name', 'slug', 'meta_description', 'meta_keywords',
+            'id', 'name', 'slug', 'description',
             'product_count', 'products'
         ]
         read_only_fields = ['slug']
@@ -45,7 +45,7 @@ class CategoryCreateUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Category
-        fields = ['name', 'meta_description', 'meta_keywords']
+        fields = ['name', 'slug']
     
     def create(self, validated_data):
         # Slug will be auto-generated in the model's save method
@@ -91,8 +91,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'slug', 'image', 'description',
-            'meta_description', 'meta_keywords', 'price', 'available',
+            'id', 'name', 'slug', 'image', 'description', 'price', 'available',
             'stock_quantity', 'low_stock_threshold', 'track_inventory',
             'is_in_stock', 'is_low_stock', 'category', 'created_at', 'updated_at'
         ]
@@ -111,44 +110,25 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
 class ProductCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for creating and updating products."""
-    category_id = serializers.IntegerField(write_only=True, required=False)
+    category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all(), required=True)
     
     class Meta:
         model = Product
         fields = [
-            'name', 'category_id', 'image', 'description',
-            'meta_description', 'meta_keywords', 'price', 'available',
+            'name', 'category', 'image', 'description', 'price', 'available',
             'stock_quantity', 'low_stock_threshold', 'track_inventory'
         ]
-    
-    def validate_price(self, value):
-        """Validate that price is positive."""
-        if value <= 0:
-            raise serializers.ValidationError("Price must be greater than zero.")
-        return value
-    
-    def validate_stock_quantity(self, value):
-        """Validate stock quantity."""
-        if value < 0:
-            raise serializers.ValidationError("Stock quantity cannot be negative.")
-        return value
-    
-    def validate_low_stock_threshold(self, value):
-        """Validate low stock threshold."""
-        if value < 0:
-            raise serializers.ValidationError("Low stock threshold cannot be negative.")
-        return value
     
     def validate(self, data):
         """Cross-field validation."""
         # Ensure category exists if provided
-        if 'category_id' in data:
+        if 'category' in data:
             try:
-                category = Category.objects.get(id=data['category_id'])
+                category = Category.objects.get(id=data['category'].id)
                 data['category'] = category
             except Category.DoesNotExist:
                 raise serializers.ValidationError({
-                    'category_id': 'Category with this ID does not exist.'
+                    'category': 'Category with this ID does not exist.'
                 })
         
         # Validate stock settings
@@ -161,20 +141,14 @@ class ProductCreateUpdateSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        # Remove category_id as we've already set category
-        validated_data.pop('category_id', None)
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
-        # Remove category_id as we've already set category
-        validated_data.pop('category_id', None)
-        
         # Regenerate slug if name changes
         if 'name' in validated_data and validated_data['name'] != instance.name:
             instance.slug = slugify(validated_data['name'])
         
         return super().update(instance, validated_data)
-
 
 class StockUpdateSerializer(serializers.Serializer):
     """Serializer for updating product stock."""
