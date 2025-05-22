@@ -33,7 +33,8 @@ INSTALLED_APPS = [
     # Third-party apps
     'drf_yasg',
     'rest_framework',
-
+    'django_filters',
+    
     # Local apps
     'products.apps.ProductsConfig',
     'cart.apps.CartConfig',
@@ -76,15 +77,15 @@ TEMPLATES = [
 WSGI_APPLICATION = 'bake_world.wsgi.application'
 
 # Database configuration
-if IS_PRODUCTION:
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=config('DATABASE_URL'),
-            conn_max_age=600
-        )
-    }
-else:
-    DATABASES = {
+# if IS_PRODUCTION:
+#     DATABASES = {
+#         'default': dj_database_url.config(
+#             default=config('DATABASE_URL'),
+#             conn_max_age=600
+#         )
+#     }
+# else:
+DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
@@ -98,6 +99,21 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
+
+
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    # ... other DRF settings
+}
+
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'

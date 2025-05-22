@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "d9fa2ad2e5a321a72eccf9fbc66131d571375914792b4f967c25db24313a2cc3"
+            "sha256": "eb6a925b53d2c1e7bbc333ff1dce98739e05bcc14a8ef90f64f28e58dace169b"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -386,6 +386,15 @@
             "markers": "python_version >= '3.9' and python_version < '4'",
             "version": "==0.12.0"
         },
+        "django-filter": {
+            "hashes": [
+                "sha256:1ec9eef48fa8da1c0ac9b411744b16c3f4c31176c867886e4c48da369c407153",
+                "sha256:4fa48677cf5857b9b1347fed23e355ea792464e0fe07244d1fdfb8a806215b80"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.9'",
+            "version": "==25.1"
+        },
         "django-rest-swagger": {
             "hashes": [
                 "sha256:48f6aded9937e90ae7cbe9e6c932b9744b8af80cc4e010088b3278c700e0685b",
@@ -432,11 +441,12 @@
         },
         "forex-python": {
             "hashes": [
-                "sha256:7d4a5c36b66e7ef9ee515f607a41249a1ae1a2499a9e011702b66f784325cc76",
-                "sha256:8e6b375ad1f15b90a15d95ef8156651fae8487075dd007d2b7dd8efad8f44e41"
+                "sha256:d7fa5f98305d9afee8bef5e05dcdc439137476827086cd5c13b45d5ffc97eb19",
+                "sha256:f56c91300818daae629c9b55a980b7c223e1fc075fc60b12355bfae959aba0c3"
             ],
             "index": "pypi",
-            "version": "==1.8"
+            "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3' and python_version < '4'",
+            "version": "==1.9.2"
         },
         "gunicorn": {
             "hashes": [
@@ -520,12 +530,12 @@
         },
         "jsonpickle": {
             "hashes": [
-                "sha256:b4ac7d0a75ddcdfd93445737f1d36ff28768690d43e54bf5d0ddb1d915e580df",
-                "sha256:f299818b39367c361b3f26bdba827d4249ab5d383cd93144d0f94b5417aacb35"
+                "sha256:763f837a0b2586b45424d9a07108a798d9feac52f3a152606336f7f9e1a22ffa",
+                "sha256:d417d6d693a63fb137e53334164aba618d18aca05a4fd025ff01c2ec134ae4c8"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.8'",
-            "version": "==4.0.5"
+            "version": "==4.1.0"
         },
         "kombu": {
             "hashes": [

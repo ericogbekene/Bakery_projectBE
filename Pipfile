@@ -66,6 +66,7 @@ validators = "*"
 vine = "*"
 wcwidth = "*"
 whitenoise = "*"
+django-filter = "*"
 
 [dev-packages]
 
