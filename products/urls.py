@@ -9,5 +9,5 @@ router.register(r'products', views.ProductViewSet, basename='product')
 app_name = 'products'
 
 urlpatterns = [
-    path('api/', include(router.urls)),
+    path('', include(router.urls)),
 ]
