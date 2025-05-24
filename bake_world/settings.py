@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'rest_framework',
     'django_filters',
+    'rest_framework_simplejwt',
     
 
     
@@ -43,6 +44,7 @@ INSTALLED_APPS = [
     'cart.apps.CartConfig',
     'orders.apps.OrdersConfig',
     'payment.apps.PaymentConfig',
+    'accounts.apps.AccountsConfig',
 ]
 
 # Middleware
@@ -114,8 +116,14 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    )
     # ... other DRF settings
 }
+
+AUTH_USER_MODEL = 'accounts.CustomUser'
 
 
 # Internationalization
