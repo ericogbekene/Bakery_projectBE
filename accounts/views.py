@@ -3,15 +3,53 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-
+from rest_framework import generics
+from rest_framework.permissions import AllowAny
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from accounts.models import CustomUser
+from accounts.serializers import UserRegistrationSerializer
+
 
 User = get_user_model()
+
+
+class UserRegistrationView(generics.CreateAPIView):
+    queryset = CustomUser.objects.all()
+    serializer_class = UserRegistrationSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'message': 'Registration successful.',
+            'user_id': user.id,
+            'access': str(refresh.access_token),
+            'email': user.email
+        }, status=status.HTTP_201_CREATED)
+
+
+class VerifyEmailView(APIView):
+    """Verify user email using token sent via email"""
+
+    def get(self, request, token):
+        try:
+            user = User.objects.get(verification_token=token)
+            user.is_verified = True
+            user.verification_token = None  # Clear token after successful verification
+            user.save()
+            return Response({"message": "Email verified successfully."}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"error": "Invalid or expired verification token."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -46,7 +84,6 @@ class PasswordResetRequestView(APIView):
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}"
-
             send_mail(
                 subject="Password Reset Request",
                 message=f"Click the link to reset your password: {reset_link}",
@@ -54,7 +91,6 @@ class PasswordResetRequestView(APIView):
                 recipient_list=[email],
                 fail_silently=False,
             )
-
             return Response({"message": "Password reset email sent."})
         except User.DoesNotExist:
             return Response({"error": "User with this email does not exist."}, status=404)
