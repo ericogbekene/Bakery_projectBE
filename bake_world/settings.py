@@ -7,13 +7,14 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('SECRET_KEY')
-DEBUG=config('DEBUG', default=False, cast=bool)
+DEBUG=config('DEBUG', default=True, cast=bool)
 
 # Production flag
-IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
+#IS_PRODUCTION = config('IS_PRODUCTION', default=True, cast=bool)
 
 # Allowed hosts
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="").split(",")
+ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1", "https://micro-foodbank-backend-44tkf.kinsta.app", "https://baker-production.up.railway.app"]
+#config("ALLOWED_HOSTS", default="").split(",")
 
 # CSRF Trusted Origins
 CSRF_TRUSTED_ORIGINS = [
@@ -80,22 +81,22 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'bake_world.wsgi.application'
-
-# Database configuration
-if IS_PRODUCTION:
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=config('DATABASE_URL'),
-            conn_max_age=600
-        )
-    }
-else:
-    DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
+# #
+# # Database configuration
+# if IS_PRODUCTION:
+#     DATABASES = {
+#         'default': dj_database_url.config(
+#             default=config('DATABASE_URL'),
+#             conn_max_age=600
+#         )
+#     }
+# else:
+DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
