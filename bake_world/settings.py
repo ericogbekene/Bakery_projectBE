@@ -6,21 +6,106 @@ from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config('SECRET_KEY')
-DEBUG=config('DEBUG', default=True, cast=bool)
-
 # Production flag
-#IS_PRODUCTION = config('IS_PRODUCTION', default=True, cast=bool)
+
+IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
+
+SECRET_KEY = config('DJANGO_SECRET_KEY', default=os.getenv("DJANGO_SECRET_KEY", "replace-this-in-production!"))
+DEBUG = config('DEBUG', default=False, cast=bool)
+
+
 
 # Allowed hosts
-ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1", "https://micro-foodbank-backend-44tkf.kinsta.app", "https://baker-production.up.railway.app"]
-#config("ALLOWED_HOSTS", default="").split(",")
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
 # CSRF Trusted Origins
 CSRF_TRUSTED_ORIGINS = [
     'https://micro-foodbank-backend-44tkf.kinsta.app',
     'https://baker-production.up.railway.app',
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
+
+# CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = True 
+CORS_ALLOW_CREDENTIALS = True
+
+# CORS allowed origins
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://micro-foodbank-backend-44tkf.kinsta.app",
+    "https://baker-production.up.railway.app",
+]
+
+# Environment-specific CORS configuration
+if IS_PRODUCTION:
+    CORS_ALLOWED_ORIGINS = [
+        f"https://{host}" for host in config('ALLOWED_HOSTS', default='').split(',') 
+        if host.strip() and not host.startswith('localhost') and not host.startswith('127.0.0.1')
+    ]
+    # Add localhost for development testing
+    CORS_ALLOWED_ORIGINS.extend([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ])
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+# Extended headers list to handle more CORS scenarios
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'cache-control',
+    'pragma',
+    'if-modified-since',
+    'x-forwarded-for',
+    'x-forwarded-proto',
+]
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# Increased preflight cache time
+CORS_PREFLIGHT_MAX_AGE = 86400
+
+CSRF_COOKIE_HTTPONLY = False
+CSRF_USE_SESSIONS = False
+
+# Security settings - Apply based on DEBUG setting
+if not DEBUG:
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_SSL_REDIRECT = False  # change this later
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+SECURE_SSL_REDIRECT = False
+
+
 
 # Installed apps
 INSTALLED_APPS = [
@@ -32,11 +117,13 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Third-party apps
+    # THIRD PARTY APP
     'drf_yasg',
+    "corsheaders",
     'rest_framework',
-    'django_filters',
+    'rest_framework.authtoken',
     'rest_framework_simplejwt',
+    'django_filters',
     
 
     
@@ -81,22 +168,22 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'bake_world.wsgi.application'
-# #
-# # Database configuration
-# if IS_PRODUCTION:
-#     DATABASES = {
-#         'default': dj_database_url.config(
-#             default=config('DATABASE_URL'),
-#             conn_max_age=600
-#         )
-#     }
-# else:
-DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+#
+# Database configuration
+if IS_PRODUCTION:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=config('DATABASE_URL'),
+            conn_max_age=600
+        )
     }
+else:
+    DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
