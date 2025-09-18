@@ -7,8 +7,8 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Production flag
-
-IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
+IS_PRODUCTION = False
+# IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
 
 SECRET_KEY = config('DJANGO_SECRET_KEY', default=os.getenv("DJANGO_SECRET_KEY", "replace-this-in-production!"))
 DEBUG = config('DEBUG', default=True, cast=bool)
