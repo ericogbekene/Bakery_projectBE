@@ -11,6 +11,7 @@ click-didyoumean
 click-plugins
 click-repl
 coreapi
+cloudinary
 
 coreschema
 dj-database-url
@@ -22,6 +23,7 @@ django-rest-swagger
 djangorestframework
 djangorestframework_simplejwt
 drf-yasg
+django-cloudinary-storage
 flower
 forex-python
 gunicorn

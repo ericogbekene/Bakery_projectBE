@@ -67,7 +67,13 @@ class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     is_in_stock = serializers.SerializerMethodField()
     is_low_stock = serializers.SerializerMethodField()
-
+    
+     # Include computed image URLs
+    image_url = serializers.ReadOnlyField()
+    thumbnail_url = serializers.ReadOnlyField()
+    medium_image_url = serializers.ReadOnlyField()
+    large_image_url = serializers.ReadOnlyField()
+    
     class Meta:
         model = Product
         fields = [

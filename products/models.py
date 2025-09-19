@@ -2,6 +2,9 @@ from django.db import models
 from django.utils.text import slugify
 from django.urls import reverse
 from django.core.validators import MinValueValidator
+from cloudinary.models import CloudinaryField
+from cloudinary import CloudinaryImage
+
 
 
 class Category(models.Model):
@@ -62,8 +65,13 @@ class Product(models.Model):
     )
     name = models.CharField(max_length=200, help_text="The name of the product.")
     slug = models.SlugField(max_length=200, help_text="A URL-friendly identifier for the product.")
-    image = models.ImageField(
-        upload_to='products/%Y/%m/%d',
+    
+    # updated Image field to use Cloudinary
+    
+    image = CloudinaryField(
+        'image',
+        folder='products_images',
+        transformation=[{'quality': 'auto', 'fetch_format': 'auto'}],
         blank=True,
         null=True,
         help_text="An image of the product."
@@ -145,7 +153,53 @@ class Product(models.Model):
         Returns the absolute URL for a product instance.
         """
         return reverse('product_detail', args=[self.id, self.slug])
-
+    
+    @property
+    def image_url(self):
+        """Get the full cloudinary url for the image"""
+        if self.image:
+            return self.image.url
+        return None
+    @property
+    def thumbnail_url(self):
+        """Get a thumbnail version from Cloudinary with proper transformation"""
+        if self.image:
+            # Using cloudinary's transformation API for thumbnails
+            public_id = self.image.public_id
+            thumbnail = CloudinaryImage(public_id).build_url(
+                transformation=[
+                    {'width': 150, 'height': 150, 'cake': 'fill', 'gravity': 'center'},
+                    {'quality': 'auto', 'fetch_format': 'auto'}    
+                ]
+            )
+            return thumbnail
+        return None
+    @property
+    def medium_image_url(self):
+        """Get a medium-size version from cloudinary"""
+        if self.image:
+            public_id = self.image.public_id
+            medium = CloudinaryImage(public_id).build_url(
+                transformation=[
+                    {'width': 400, 'height': 300, 'cake':'fit'},
+                    {'quality': 'auto', 'fetch_format': 'auto'}
+                ]
+            )
+            return medium
+        return None
+    @property
+    def large_image_url(self):
+        """Get a large version from cloudinary"""
+        if self.image:
+            public_id = self.image.public_id
+            large = CloudinaryImage(public_id).build_url(
+                transformation=[
+                    {'width': 800, 'height': 600, 'cake': 'fit'},
+                    {'quality': 'auto', 'fetch_format': 'auto'}
+                ]
+                )
+            return large
+        return None
     class Meta:
         """
         Meta options for the Product model.
