@@ -79,9 +79,10 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'slug', 'image', 'price', 'available',
             'category_name', 'stock_quantity', 'is_in_stock', 'is_low_stock',
-            'created_at'
+            'created_at', 'image_url', 'medium_image_url', 'large_image_url', 'thumbnail_url'
         ]
-        read_only_fields = ['slug', 'created_at', 'is_in_stock', 'is_low_stock']
+        read_only_fields = ['slug', 'created_at', 'is_in_stock', 'is_low_stock', 
+                            'image_url', 'medium_image_url', 'large_image_url', 'thumbnail_url']
 
     def get_is_in_stock(self, obj):
         """Checks if the product is currently in stock."""
