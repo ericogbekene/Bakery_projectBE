@@ -9,8 +9,8 @@ import cloudinary.api
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Production flag
-IS_PRODUCTION = False
-# IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
+# IS_PRODUCTION = False
+IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
 
 SECRET_KEY = config('DJANGO_SECRET_KEY', default=os.getenv("DJANGO_SECRET_KEY", "replace-this-in-production!"))
 DEBUG = config('DEBUG', default=True, cast=bool)
@@ -24,10 +24,12 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(','
 CSRF_TRUSTED_ORIGINS = [
     'https://micro-foodbank-backend-44tkf.kinsta.app',
     'https://baker-production.up.railway.app',
+    'https://bakery-projectbe-6q46.onrender.com',
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:5173"
 ]
 
 # CORS Configuration
@@ -38,6 +40,8 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "https://bakery-projectbe-6q46.onrender.com",
     "https://micro-foodbank-backend-44tkf.kinsta.app",
     "https://baker-production.up.railway.app",
 ]
