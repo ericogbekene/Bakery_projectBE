@@ -44,6 +44,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://bakery-projectbe-6q46.onrender.com",
     "https://baker-production.up.railway.app",
+    "https://bakery-projectbe.onrender.com",
+    "bakery-projectbe.onrender.com"
 ]
 
 # Environment-specific CORS configuration
@@ -64,8 +66,8 @@ else:
         "http://127.0.0.1:8000",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:5173",
-    ]
+        "http://138.68.23.253"
+]
 
 # Extended headers list to handle more CORS scenarios
 CORS_ALLOW_HEADERS = [
