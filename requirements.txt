@@ -24,6 +24,7 @@ djangorestframework
 djangorestframework_simplejwt
 drf-yasg
 django-cloudinary-storage
+django-filter
 flower
 forex-python
 gunicorn
