@@ -44,6 +44,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://bakery-projectbe-6q46.onrender.com",
     "https://micro-foodbank-backend-44tkf.kinsta.app",
     "https://baker-production.up.railway.app",
+    "https://bakery-projectbe.onrender.com",
 ]
 
 # Environment-specific CORS configuration
