@@ -2,16 +2,18 @@ from pathlib import Path
 import os
 import dj_database_url
 from decouple import config
-
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Production flag
-
+# IS_PRODUCTION = False
 IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
 
 SECRET_KEY = config('DJANGO_SECRET_KEY', default=os.getenv("DJANGO_SECRET_KEY", "replace-this-in-production!"))
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = config('DEBUG', default=True, cast=bool)
 
 
 
@@ -22,10 +24,12 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(','
 CSRF_TRUSTED_ORIGINS = [
     'https://micro-foodbank-backend-44tkf.kinsta.app',
     'https://baker-production.up.railway.app',
+    'https://bakery-projectbe-6q46.onrender.com',
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:5173"
 ]
 
 # CORS Configuration
@@ -36,6 +40,8 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "https://bakery-projectbe-6q46.onrender.com",
     "https://micro-foodbank-backend-44tkf.kinsta.app",
     "https://baker-production.up.railway.app",
 ]
@@ -116,6 +122,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'cloudinary_storage',
+    'cloudinary',
 
     # THIRD PARTY APP
     'drf_yasg',
@@ -137,6 +145,7 @@ INSTALLED_APPS = [
 
 # Middleware
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # Must be placed before CommonMiddleware
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -221,15 +230,52 @@ USE_I18N = True
 USE_TZ = True
 
 # Static and media files
+
+
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Handle STATICFILES_DIRS based on environment - FIXED
+if IS_PRODUCTION:
+    STATICFILES_DIRS = []
+else:
+    static_dir = os.path.join(BASE_DIR, 'static')
+    if os.path.exists(static_dir):
+        STATICFILES_DIRS = [static_dir]
+    else:
+        STATICFILES_DIRS = []
+
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+
 # Default auto field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Cloudinary settings
+CLOUDINARY_STORAGE = {
+    "CLOUDINARY_CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
+    "CLOUDINARY_API_KEY": os.getenv("CLOUDINARY_API_KEY"),
+    "CLOUDINARY_API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
+}
+
+CLOUDINARY_SETTINGS = {
+    'SECURE': True,
+    'FOLDER': 'Bakery_Project',
+    'TRANSFORMATION': [
+        {'quality': 'auto', 'fetch_format': 'auto'},
+    ],
+}
 
 # Shopping cart session ID
 CART_SESSION_ID = 'cart'
