@@ -18,7 +18,11 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 
 # Allowed hosts
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+if not IS_PRODUCTION:
+    ALLOWED_HOSTS = ["*"]
+else:
+    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+
 
 # CSRF Trusted Origins
 CSRF_TRUSTED_ORIGINS = [
@@ -33,40 +37,28 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # CORS Configuration
-CORS_ALLOW_ALL_ORIGINS = True 
 CORS_ALLOW_CREDENTIALS = True
 
-# CORS allowed origins
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://localhost:3000",
-    "https://bakery-projectbe-6q46.onrender.com",
-    "https://micro-foodbank-backend-44tkf.kinsta.app",
-    "https://baker-production.up.railway.app",
-    "https://bakery-projectbe.onrender.com",
-    "bakery-projectbe.onrender.com"
-]
-
-# Environment-specific CORS configuration
 if IS_PRODUCTION:
+    CORS_ALLOW_ALL_ORIGINS = False
+    # Combine all production origins into one list
     CORS_ALLOWED_ORIGINS = [
-        f"https://{host}" for host in config('ALLOWED_HOSTS', default='').split(',') 
-        if host.strip() and not host.startswith('localhost') and not host.startswith('127.0.0.1')
+        "https://bakery-projectbe-6q46.onrender.com",
+        "https://micro-foodbank-backend-44tkf.kinsta.app",
+        "https://baker-production.up.railway.app",
+        "https://bakery-projectbe.onrender.com",
     ]
-    # Add localhost for development testing
-    CORS_ALLOWED_ORIGINS.extend([
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ])
 else:
+    # For development, you can be more permissive
+    CORS_ALLOW_ALL_ORIGINS = False # Set to False to use the list below
     CORS_ALLOWED_ORIGINS = [
         "http://localhost:8000",
         "http://127.0.0.1:8000",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://138.68.23.253"
-]
+        "http://localhost:5173",
+        "http://138.68.23.253", # from your original settings
+    ]
 
 # Extended headers list to handle more CORS scenarios
 CORS_ALLOW_HEADERS = [
