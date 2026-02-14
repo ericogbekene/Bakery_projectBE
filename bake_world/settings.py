@@ -145,6 +145,7 @@ INSTALLED_APPS = [
     'orders.apps.OrdersConfig',
     'payment.apps.PaymentConfig',
     'accounts.apps.AccountsConfig',
+    'delivery.apps.DeliveryConfig',
 ]
 
 # Middleware

@@ -35,9 +35,9 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
-    path('api/products/', include('products.urls')),
-    path('api/cart/', include('cart.urls')),
-    path('api/orders/', include('orders.urls')),
+    # path('api/products/', include('products.urls')),
+    # path('api/cart/', include('cart.urls')),
+    # path('api/orders/', include('orders.urls')),
     path('api/payments/', include('payment.urls')),
     path('api/accounts/', include('accounts.urls')),
     path('admin/', admin.site.urls),
