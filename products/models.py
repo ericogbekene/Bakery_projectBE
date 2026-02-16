@@ -120,7 +120,6 @@ class Product(models.Model):
     
     # Cake-specific fields (only relevant when product_type='cake')
     layers = models.PositiveIntegerField(
-        default=2,
         validators=[MinValueValidator(1), MaxValueValidator(10)],
         null=True,
         blank=True,
@@ -187,16 +186,17 @@ class Product(models.Model):
                 raise ValidationError({'layers': 'Cake must have at least 1 layer.'})
             if self.preparation_days < 1:
                 raise ValidationError({'preparation_days': 'Preparation days must be at least 1.'})
-        
-        # For pastries, cake-specific fields should be None/blank
+            
         elif self.product_type == 'pastry':
-            if self.layers:
+            if self.layers not in [None, '']:
                 raise ValidationError({'layers': 'Layers field should be empty for pastries.'})
-            if self.covering:
+            if self.covering not in [None, '']:
                 raise ValidationError({'covering': 'Covering field should be empty for pastries.'})
-            if self.preparation_days and self.preparation_days != 3:  # 3 is default
+            if self.inspiration not in [None, '']:
+                raise ValidationError({'inspiration': 'Inspiration field should be empty for pastries.'})
+            if self.preparation_days not in [None, '']:
                 raise ValidationError({'preparation_days': 'Preparation days should be empty for pastries.'})
-        
+            
         super().clean()
 
     @property
