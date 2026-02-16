@@ -9,8 +9,8 @@ import cloudinary.api
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Production flag
-# IS_PRODUCTION = False
-IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
+IS_PRODUCTION = False
+# IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
 
 SECRET_KEY = config('DJANGO_SECRET_KEY', default=os.getenv("DJANGO_SECRET_KEY", "replace-this-in-production!"))
 DEBUG = config('DEBUG', default=True, cast=bool)
@@ -211,7 +211,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Django REST Framework settings
 REST_FRAMEWORK = {
-    'DEFAULT_PAGINATION_CLASS': 'products.api.pagination.StandardResultsSetPagination',
+    'DEFAULT_PAGINATION_CLASS': 'products.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
