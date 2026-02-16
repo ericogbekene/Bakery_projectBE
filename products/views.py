@@ -1,414 +1,528 @@
-# from rest_framework import viewsets, status, filters
-# from rest_framework.decorators import action
-# from rest_framework.response import Response
-# from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
-# from django_filters.rest_framework import DjangoFilterBackend
-# from django.db.models import Q, Count, Avg, F
-# from django.shortcuts import get_object_or_404
-# from django.db import transaction
-
-# from .models import Category, Product
-# from .serializers import (
-#     CategoryListSerializer, CategoryDetailSerializer, CategoryCreateUpdateSerializer,
-#     ProductListSerializer, ProductDetailSerializer, ProductCreateUpdateSerializer,
-#     StockUpdateSerializer, ProductSearchSerializer, ProductBulkUpdateSerializer
-# )
-
-
-# class CategoryViewSet(viewsets.ModelViewSet):
-#     """
-#     Provides a comprehensive API for managing product categories.
-
-#     This ViewSet supports:
-#     - Listing all categories.
-#     - Retrieving a single category by its slug.
-#     - Creating, updating, and deleting categories.
-#     - Filtering categories based on whether they contain products.
-#     - Retrieving all products within a specific category.
-#     - Getting statistics for a category.
-#     """
-#     queryset = Category.objects.all()
-#     permission_classes = [IsAuthenticatedOrReadOnly]
-#     lookup_field = 'slug'
-#     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-#     search_fields = ['name']
-#     ordering_fields = ['name', 'id']
-#     ordering = ['name']
-
-#     def get_serializer_class(self):
-#         """
-#         Dynamically selects the appropriate serializer based on the request action.
-#         """
-#         if self.action == 'list':
-#             return CategoryListSerializer
-#         elif self.action in ['create', 'update', 'partial_update']:
-#             return CategoryCreateUpdateSerializer
-#         return CategoryDetailSerializer
-
-#     def get_queryset(self):
-#         """
-#         Optionally filters the queryset to return categories based on whether they have products.
-
-#         Query Parameters:
-#         - `has_products` (boolean): If `true`, returns categories with at least one product.
-#                                   If `false`, returns categories with no products.
-#         """
-#         queryset = super().get_queryset()
-
-#         has_products = self.request.query_params.get('has_products')
-#         if has_products is not None:
-#             if has_products.lower() == 'true':
-#                 queryset = queryset.filter(products__isnull=False).distinct()
-#             elif has_products.lower() == 'false':
-#                 queryset = queryset.filter(products__isnull=True)
-
-#         return queryset
-
-#     @action(detail=True, methods=['get'])
-#     def products(self, request, slug=None):
-#         """
-#         Retrieves all available products within a specific category, with optional filtering.
-
-#         Query Parameters:
-#         - `min_price` (decimal): Filters products with a price greater than or equal to this value.
-#         - `max_price` (decimal): Filters products with a price less than or equal to this value.
-#         - `in_stock` (boolean): If `true`, returns only products that are in stock.
-#         """
-#         category = self.get_object()
-#         products = category.products.filter(available=True)
-
-#         # Apply optional filters from query parameters
-#         min_price = request.query_params.get('min_price')
-#         if min_price:
-#             products = products.filter(price__gte=min_price)
-
-#         max_price = request.query_params.get('max_price')
-#         if max_price:
-#             products = products.filter(price__lte=max_price)
-
-#         in_stock = request.query_params.get('in_stock')
-#         if in_stock and in_stock.lower() == 'true':
-#             products = products.filter(
-#                 Q(track_inventory=False, available=True) |
-#                 Q(track_inventory=True, stock_quantity__gt=0, available=True)
-#             )
-
-#         # Paginate the results
-#         page = self.paginate_queryset(products)
-#         if page is not None:
-#             serializer = ProductListSerializer(page, many=True, context={'request': request})
-#             return self.get_paginated_response(serializer.data)
-
-#         serializer = ProductListSerializer(products, many=True, context={'request': request})
-#         return Response(serializer.data)
-
-#     @action(detail=True, methods=['get'])
-#     def stats(self, request, slug=None):
-#         """
-#         Provides statistics for a specific category, such as product counts and average price.
-#         """
-#         category = self.get_object()
-#         products = category.products.all()
-
-#         stats = {
-#             'total_products': products.count(),
-#             'available_products': products.filter(available=True).count(),
-#             'unavailable_products': products.filter(available=False).count(),
-#             'in_stock_products': products.filter(
-#                 Q(track_inventory=False, available=True) |
-#                 Q(track_inventory=True, stock_quantity__gt=0, available=True)
-#             ).count(),
-#             'low_stock_products': products.filter(
-#                 track_inventory=True,
-#                 stock_quantity__lte=F('low_stock_threshold'),
-#                 stock_quantity__gt=0
-#             ).count(),
-#             'out_of_stock_products': products.filter(
-#                 track_inventory=True,
-#                 stock_quantity=0
-#             ).count(),
-#             'average_price': products.aggregate(avg_price=Avg('price'))['avg_price'] or 0,
-#         }
-
-#         return Response(stats)
-
-
-# class ProductViewSet(viewsets.ModelViewSet):
-#     """
-#     Provides a comprehensive API for managing products.
-
-#     This ViewSet supports:
-#     - Listing, retrieving, creating, updating, and deleting products.
-#     - Advanced filtering by category, price, and stock status.
-#     - Full-text search across product name and description.
-#     - Specialized actions for stock management and bulk updates.
-#     """
-#     queryset = Product.objects.select_related('category').all()
-#     permission_classes = [IsAuthenticatedOrReadOnly]
-#     lookup_field = 'slug'
-#     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-#     filterset_fields = ['category', 'available', 'track_inventory']
-#     search_fields = ['name', 'description']
-#     ordering_fields = ['name', 'price', 'created_at', 'stock_quantity']
-#     ordering = ['-created_at']
-
-#     def get_serializer_class(self):
-#         """
-#         Dynamically selects the appropriate serializer based on the request action.
-#         """
-#         if self.action == 'list':
-#             return ProductListSerializer
-#         elif self.action in ['create', 'update', 'partial_update']:
-#             return ProductCreateUpdateSerializer
-#         elif self.action == 'search':
-#             return ProductSearchSerializer
-#         elif self.action == 'update_stock':
-#             return StockUpdateSerializer
-#         elif self.action == 'bulk_update':
-#             return ProductBulkUpdateSerializer
-#         return ProductDetailSerializer
-
-#     def get_queryset(self):
-#         """
-#         Extends the default queryset to allow for advanced filtering based on query parameters.
-
-#         Query Parameters:
-#         - `min_price` (decimal): Filters for price greater than or equal to this value.
-#         - `max_price` (decimal): Filters for price less than or equal to this value.
-#         - `in_stock` (boolean): Filters for products that are in stock.
-#         - `low_stock` (boolean): Filters for products with low stock levels.
-#         - `category_slug` (string): Filters products by their category slug.
-#         """
-#         queryset = super().get_queryset()
-
-#         # Price range filtering
-#         min_price = self.request.query_params.get('min_price')
-#         if min_price:
-#             queryset = queryset.filter(price__gte=min_price)
-
-#         max_price = self.request.query_params.get('max_price')
-#         if max_price:
-#             queryset = queryset.filter(price__lte=max_price)
-
-#         # Stock-based filtering
-#         in_stock = self.request.query_params.get('in_stock')
-#         if in_stock is not None:
-#             if in_stock.lower() == 'true':
-#                 queryset = queryset.filter(
-#                     Q(track_inventory=False, available=True) |
-#                     Q(track_inventory=True, stock_quantity__gt=0, available=True)
-#                 )
-#             elif in_stock.lower() == 'false':
-#                 queryset = queryset.filter(
-#                     Q(track_inventory=True, stock_quantity=0) |
-#                     Q(available=False)
-#                 )
-
-#         low_stock = self.request.query_params.get('low_stock')
-#         if low_stock and low_stock.lower() == 'true':
-#             queryset = queryset.filter(
-#                 track_inventory=True,
-#                 stock_quantity__lte=F('low_stock_threshold'),
-#                 stock_quantity__gt=0
-#             )
-
-#         # Category filtering
-#         category_slug = self.request.query_params.get('category_slug')
-#         if category_slug:
-#             queryset = queryset.filter(category__slug=category_slug)
-
-#         return queryset
-
-#     @action(detail=False, methods=['get'])
-#     def search(self, request):
-#         """
-#         Provides full-text search functionality across multiple product fields.
-
-#         Query Parameters:
-#         - `q` (string): The search query.
-#         - `category_slug` (string): An optional category to scope the search.
-#         - `min_price`, `max_price` (decimal): Optional price range filters.
-#         """
-#         query = request.query_params.get('q', '')
-#         if not query:
-#             return Response({'detail': 'Search query parameter "q" is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-#         # Search across name, description, and category name
-#         products = Product.objects.filter(
-#             Q(name__icontains=query) |
-#             Q(description__icontains=query) |
-#             Q(category__name__icontains=query)
-#         ).select_related('category').filter(available=True)
-
-#         # Apply additional filters
-#         category_slug = request.query_params.get('category_slug')
-#         if category_slug:
-#             products = products.filter(category__slug=category_slug)
-
-#         min_price = request.query_params.get('min_price')
-#         if min_price:
-#             products = products.filter(price__gte=min_price)
-
-#         max_price = request.query_params.get('max_price')
-#         if max_price:
-#             products = products.filter(price__lte=max_price)
-
-#         # Paginate the results
-#         page = self.paginate_queryset(products)
-#         if page is not None:
-#             serializer = ProductSearchSerializer(page, many=True, context={'request': request})
-#             return self.get_paginated_response(serializer.data)
-
-#         serializer = ProductSearchSerializer(products, many=True, context={'request': request})
-#         return Response(serializer.data)
-
-#     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-#     def update_stock(self, request, slug=None):
-#         """
-#         Updates the stock level of a single product.
-#         Requires authentication.
-
-#         Request Body:
-#         - `action` (string): 'increase', 'decrease', or 'set'.
-#         - `quantity` (integer): The amount to adjust the stock by.
-#         - `reason` (string, optional): A reason for the stock adjustment.
-#         """
-#         product = self.get_object()
-#         serializer = StockUpdateSerializer(data=request.data, context={'product': product, 'request': request})
-
-#         if serializer.is_valid():
-#             action = serializer.validated_data['action']
-#             quantity = serializer.validated_data['quantity']
-
-#             try:
-#                 with transaction.atomic():
-#                     if action == 'increase':
-#                         product.increase_stock(quantity)
-#                         message = f'Increased stock by {quantity}'
-#                     elif action == 'decrease':
-#                         if not product.reduce_stock(quantity):
-#                             return Response({'detail': 'Insufficient stock for this operation.'}, status=status.HTTP_400_BAD_REQUEST)
-#                         message = f'Decreased stock by {quantity}'
-#                     elif action == 'set':
-#                         product.stock_quantity = quantity
-#                         product.save()
-#                         message = f'Set stock to {quantity}'
-
-#                 return Response({
-#                     'detail': message,
-#                     'current_stock': product.stock_quantity,
-#                     'is_in_stock': product.is_in_stock(),
-#                     'is_low_stock': product.is_low_stock()
-#                 })
-
-#             except Exception as e:
-#                 return Response({'detail': f'Error updating stock: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-#     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
-#     def bulk_update(self, request):
-#         """
-#         Performs bulk actions on a list of products.
-#         Requires authentication.
-
-#         Request Body:
-#         - `product_ids` (list of integers): The IDs of the products to update.
-#         - `action` (string): 'activate', 'deactivate', 'delete', or 'update_category'.
-#         - `category_id` (integer, optional): Required if action is 'update_category'.
-#         """
-#         serializer = ProductBulkUpdateSerializer(data=request.data)
-
-#         if serializer.is_valid():
-#             product_ids = serializer.validated_data['product_ids']
-#             action = serializer.validated_data['action']
-
-#             try:
-#                 with transaction.atomic():
-#                     products = Product.objects.filter(id__in=product_ids)
-
-#                     if action == 'activate':
-#                         products.update(available=True)
-#                         message = f'Activated {products.count()} products'
-#                     elif action == 'deactivate':
-#                         products.update(available=False)
-#                         message = f'Deactivated {products.count()} products'
-#                     elif action == 'delete':
-#                         count, _ = products.delete()
-#                         message = f'Deleted {count} products'
-#                     elif action == 'update_category':
-#                         category_id = serializer.validated_data.get('category_id')
-#                         category = get_object_or_404(Category, id=category_id)
-#                         products.update(category=category)
-#                         message = f'Updated category for {products.count()} products'
-
-#                 return Response({'detail': message})
-
-#             except Exception as e:
-#                 return Response({'detail': f'Error performing bulk update: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-#     @action(detail=False, methods=['get'])
-#     def low_stock(self, request):
-#         """
-#         Retrieves a list of products that are low on stock.
-#         """
-#         products = Product.objects.filter(
-#             track_inventory=True,
-#             stock_quantity__lte=F('low_stock_threshold'),
-#             stock_quantity__gt=0
-#         ).select_related('category')
-
-#         page = self.paginate_queryset(products)
-#         if page is not None:
-#             serializer = ProductListSerializer(page, many=True, context={'request': request})
-#             return self.get_paginated_response(serializer.data)
-
-#         serializer = ProductListSerializer(products, many=True, context={'request': request})
-#         return Response(serializer.data)
-
-#     @action(detail=False, methods=['get'])
-#     def out_of_stock(self, request):
-#         """
-#         Retrieves a list of products that are out of stock.
-#         """
-#         products = Product.objects.filter(
-#             track_inventory=True,
-#             stock_quantity=0
-#         ).select_related('category')
-
-#         page = self.paginate_queryset(products)
-#         if page is not None:
-#             serializer = ProductListSerializer(page, many=True, context={'request': request})
-#             return self.get_paginated_response(serializer.data)
-
-#         serializer = ProductListSerializer(products, many=True, context={'request': request})
-#         return Response(serializer.data)
-
-#     @action(detail=False, methods=['get'])
-#     def featured(self, request):
-#         """
-#         Retrieves a list of featured products.
-#         Currently, this returns the 10 newest available products.
-#         """
-#         products = Product.objects.filter(available=True).select_related('category')[:10]
-#         serializer = ProductListSerializer(products, many=True, context={'request': request})
-#         return Response(serializer.data)
-
-#     @action(detail=True, methods=['get'])
-#     def related(self, request, slug=None):
-#         """
-#         Retrieves a list of related products from the same category.
-#         """
-#         product = self.get_object()
-#         if not product.category:
-#             return Response([])
-
-#         related_products = Product.objects.filter(
-#             category=product.category,
-#             available=True
-#         ).exclude(id=product.id).select_related('category')[:6]
-
-#         serializer = ProductListSerializer(related_products, many=True, context={'request': request})
-#         return Response(serializer.data)
+from rest_framework import generics, filters, status, permissions
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django_filters.rest_framework import DjangoFilterBackend
+from django.shortcuts import get_object_or_404
+from products.models import Product, Category
+from .serializers import (
+    ProductListSerializer,
+    ProductDetailSerializer,
+    ProductCreateUpdateSerializer,
+    ProductCakeDetailSerializer,
+    CategoryListSerializer,
+    CategoryDetailSerializer,
+    CategoryCreateUpdateSerializer,
+    ProductTypeFilterSerializer,
+    ProductSearchSerializer,
+)
+from .pagination import (
+    StandardResultsSetPagination, 
+    SmallResultsSetPagination,
+    LargeResultsSetPagination
+)
+
+
+# ============================================================================
+# CUSTOM PERMISSIONS
+# ============================================================================
+
+class IsAdminOrReadOnly(permissions.BasePermission):
+    """
+    Custom permission to only allow admins to edit.
+    Read-only for everyone else.
+    """
+    def has_permission(self, request, view):
+        # Allow read-only for everyone
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        # Write permissions only for admin users
+        return request.user and request.user.is_staff
+
+
+class IsAdminForWrite(permissions.BasePermission):
+    """
+    Custom permission that allows:
+    - Admin users: all operations
+    - Authenticated users: read-only
+    - Anonymous users: read-only
+    """
+    def has_permission(self, request, view):
+        # Allow read-only for all
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        
+        # Write operations require admin
+        return request.user and request.user.is_staff
+
+
+# ============================================================================
+# PUBLIC VIEWS (No authentication required)
+# ============================================================================
+
+class ProductListView(generics.ListAPIView):
+    """
+    GET /api/products/
+    
+    List all available products with optional filtering.
+    
+    Query Parameters:
+    - product_type: 'cake' or 'pastry'
+    - category: category ID
+    - available: true/false (default: true)
+    - search: search in name and description
+    """
+    permission_classes = [permissions.AllowAny]  # Public access
+    serializer_class = ProductListSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['product_type', 'category', 'available']
+    search_fields = ['name', 'description']
+    pagination_class = StandardResultsSetPagination
+    
+    def get_queryset(self):
+        """
+        Return available products ordered by name.
+        """
+        return Product.objects.filter(available=True).order_by('name')
+    
+    def list(self, request, *args, **kwargs):
+        """
+        Override list to add filter information to response.
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Validate filter parameters
+        filter_serializer = ProductTypeFilterSerializer(data=request.query_params)
+        filter_serializer.is_valid(raise_exception=False)
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response({
+                'products': serializer.data,
+                'filters': request.query_params,
+                'total_count': queryset.count()
+            })
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'products': serializer.data,
+            'filters': request.query_params,
+            'total_count': queryset.count()
+        })
+
+
+class ProductCakeListView(generics.ListAPIView):
+    """
+    GET /api/products/cakes/
+    
+    List all available cakes only.
+    """
+    permission_classes = [permissions.AllowAny]
+    serializer_class = ProductListSerializer
+    pagination_class = StandardResultsSetPagination
+    
+    def get_queryset(self):
+        """
+        Return available cakes ordered by name.
+        """
+        return Product.objects.filter(
+            product_type='cake', 
+            available=True
+        ).order_by('name')
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response({
+                'cakes': serializer.data,
+                'count': queryset.count()
+            })
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'cakes': serializer.data,
+            'count': queryset.count()
+        })
+
+
+class ProductPastryListView(generics.ListAPIView):
+    """
+    GET /api/products/pastries/
+    
+    List all available pastries only.
+    """
+    permission_classes = [permissions.AllowAny]  # Public access
+    serializer_class = ProductListSerializer
+    pagination_class = StandardResultsSetPagination
+    
+    def get_queryset(self):
+        """
+        Return available pastries ordered by name.
+        """
+        return Product.objects.filter(
+            product_type='pastry', 
+            available=True
+        ).order_by('name')
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response({
+                'pastries': serializer.data,
+                'count': queryset.count()
+            })
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'pastries': serializer.data,
+            'count': queryset.count()
+        })
+
+
+class ProductDetailView(generics.RetrieveAPIView):
+    """
+    GET /api/products/<slug:slug>/
+    
+    Get detailed information about a specific product.
+    """
+    permission_classes = [permissions.AllowAny]  # Public access
+    queryset = Product.objects.filter(available=True)
+    serializer_class = ProductDetailSerializer
+    lookup_field = 'slug'
+
+
+class ProductCakeDetailView(APIView):
+    """
+    GET /api/products/<slug:slug>/customize/
+    
+    Get cake details with all available customization options.
+    Only works for cakes, returns 400 for pastries.
+    """
+    permission_classes = [permissions.AllowAny]  # Public access
+    
+    def get(self, request, slug):
+        """
+        Retrieve cake with customization options.
+        """
+        # Get the product
+        product = get_object_or_404(
+            Product.objects.filter(available=True),
+            slug=slug
+        )
+        
+        # Verify it's a cake
+        if not product.is_cake:
+            return Response(
+                {'error': 'This endpoint is only for cakes.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Serialize with cake detail serializer
+        serializer = ProductCakeDetailSerializer(
+            product, 
+            context={'request': request}
+        )
+        
+        # Get customization options from cart app
+        customization_options = self._get_customization_options()
+        
+        data = serializer.data
+        data['customization_options'] = customization_options
+        
+        return Response(data)
+    
+    def _get_customization_options(self):
+        """
+        Helper method to get customization options.
+        """
+        from cart.models import (
+            CakeSizeMultiplier, 
+            CakeFlavorPrice, 
+            CakeCustomizationOption
+        )
+        
+        # Get active sizes
+        sizes = CakeSizeMultiplier.objects.all().order_by('size')
+        
+        # Get active flavors
+        flavors = CakeFlavorPrice.objects.filter(is_active=True)
+        
+        # Get active addons
+        addons = CakeCustomizationOption.objects.filter(is_active=True)
+        
+        return {
+            'sizes': [
+                {
+                    'id': size.id,
+                    'size': size.size,
+                    'display': size.get_size_display(),
+                    'multiplier': str(size.multiplier)
+                } for size in sizes
+            ],
+            'flavors': [
+                {
+                    'id': flavor.id,
+                    'name': flavor.flavor,
+                    'multiplier': str(flavor.price_multiplier)
+                } for flavor in flavors
+            ],
+            'addons': [
+                {
+                    'id': addon.id,
+                    'type': addon.customization_type,
+                    'name': addon.get_customization_type_display(),
+                    'price': str(addon.price_per_unit),
+                    'description': addon.description
+                } for addon in addons
+            ]
+        }
+
+
+class CategoryListView(generics.ListAPIView):
+    """
+    GET /api/categories/
+    
+    List all categories with product counts.
+    """
+    permission_classes = [permissions.AllowAny]  # Public access
+    queryset = Category.objects.all().order_by('name')
+    serializer_class = CategoryListSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name']
+    pagination_class = SmallResultsSetPagination
+
+
+class CategoryDetailView(generics.RetrieveAPIView):
+    """
+    GET /api/categories/<slug:slug>/
+    
+    Get category details with its products.
+    """
+    permission_classes = [permissions.AllowAny]  # Public access
+    queryset = Category.objects.all()
+    serializer_class = CategoryDetailSerializer
+    lookup_field = 'slug'
+
+
+class ProductSearchView(generics.ListAPIView):
+    """
+    GET /api/products/search/?q=<query>
+    
+    Search products by name or description.
+    """
+    permission_classes = [permissions.AllowAny]  # Public access
+    serializer_class = ProductSearchSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name', 'description']
+    pagination_class = StandardResultsSetPagination
+    
+    def get_queryset(self):
+        """
+        Return available products ordered by relevance.
+        """
+        return Product.objects.filter(available=True).order_by('name')
+
+
+class ProductCountByTypeView(APIView):
+    """
+    GET /api/products/counts/
+    
+    Get counts of products by type.
+    """
+    permission_classes = [permissions.AllowAny]  # Public access
+    
+    def get(self, request):
+        """
+        Return counts of cakes and pastries.
+        """
+        cake_count = Product.objects.filter(
+            product_type='cake', 
+            available=True
+        ).count()
+        
+        pastry_count = Product.objects.filter(
+            product_type='pastry', 
+            available=True
+        ).count()
+        
+        return Response({
+            'cakes': cake_count,
+            'pastries': pastry_count,
+            'total': cake_count + pastry_count
+        })
+
+
+# ============================================================================
+# ADMIN/STAFF ONLY VIEWS (Require admin authentication)
+# ============================================================================
+
+class ProductCreateView(generics.CreateAPIView):
+    """
+    POST /api/products/create/
+    
+    Create a new product.
+    Requires admin authentication.
+    """
+    permission_classes = [permissions.IsAdminUser]  # Admin only
+    queryset = Product.objects.all()
+    serializer_class = ProductCreateUpdateSerializer
+    pagination_class = LargeResultsSetPagination
+    
+    def perform_create(self, serializer):
+        """
+        Set the slug from name.
+        """
+        serializer.save()
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'message': 'Product created successfully.',
+                'product': serializer.data
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers
+        )
+
+
+class ProductUpdateView(generics.UpdateAPIView):
+    """
+    PUT/PATCH /api/products/<slug:slug>/update/
+    
+    Update an existing product.
+    Requires admin authentication.
+    """
+    permission_classes = [permissions.IsAdminUser]  # Admin only
+    queryset = Product.objects.all()
+    serializer_class = ProductCreateUpdateSerializer
+    lookup_field = 'slug'
+    
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        return Response(
+            {
+                'message': 'Product updated successfully.',
+                'product': serializer.data
+            }
+        )
+
+
+class ProductDeleteView(generics.DestroyAPIView):
+    """
+    DELETE /api/products/<slug:slug>/delete/
+    
+    Delete a product.
+    Requires admin authentication.
+    """
+    permission_classes = [permissions.IsAdminUser]  # Admin only
+    queryset = Product.objects.all()
+    lookup_field = 'slug'
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        product_name = instance.name
+        self.perform_destroy(instance)
+        return Response(
+            {'message': f'Product "{product_name}" deleted successfully.'},
+            status=status.HTTP_200_OK
+        )
+
+
+class CategoryCreateView(generics.CreateAPIView):
+    """
+    POST /api/categories/create/
+    
+    Create a new category.
+    Requires admin authentication.
+    """
+    permission_classes = [permissions.IsAdminUser]  # Admin only
+    queryset = Category.objects.all()
+    serializer_class = CategoryCreateUpdateSerializer
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'message': 'Category created successfully.',
+                'category': serializer.data
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers
+        )
+
+
+class CategoryUpdateView(generics.UpdateAPIView):
+    """
+    PUT/PATCH /api/categories/<slug:slug>/update/
+    
+    Update an existing category.
+    Requires admin authentication.
+    """
+    permission_classes = [permissions.IsAdminUser]  # Admin only
+    queryset = Category.objects.all()
+    serializer_class = CategoryCreateUpdateSerializer
+    lookup_field = 'slug'
+    
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        return Response(
+            {
+                'message': 'Category updated successfully.',
+                'category': serializer.data
+            }
+        )
+
+
+class CategoryDeleteView(generics.DestroyAPIView):
+    """
+    DELETE /api/categories/<slug:slug>/delete/
+    
+    Delete a category.
+    Requires admin authentication.
+    """
+    permission_classes = [permissions.IsAdminUser]  # Admin only
+    queryset = Category.objects.all()
+    lookup_field = 'slug'
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        category_name = instance.name
+        
+        # Check if category has products
+        if instance.products.exists():
+            return Response(
+                {
+                    'error': 'Cannot delete category with existing products.',
+                    'product_count': instance.products.count()
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        self.perform_destroy(instance)
+        return Response(
+            {'message': f'Category "{category_name}" deleted successfully.'},
+            status=status.HTTP_200_OK
+        )

@@ -209,20 +209,18 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 
-
+# Django REST Framework settings
 REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'products.api.pagination.StandardResultsSetPagination',
+    'PAGE_SIZE': 20,
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
-    
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
-    # ... other DRF settings
 }
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
