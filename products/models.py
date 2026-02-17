@@ -120,9 +120,9 @@ class Product(models.Model):
     
     # Cake-specific fields (only relevant when product_type='cake')
     layers = models.PositiveIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(10)],
-        null=True,
+        null=True, 
         blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
         help_text="Number of cake layers (e.g., 2, 4). Required for cakes."
     )
     
@@ -141,10 +141,9 @@ class Product(models.Model):
     )
     
     preparation_days = models.PositiveIntegerField(
-        default=3,
-        validators=[MinValueValidator(1), MaxValueValidator(30)],
         null=True,
         blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(30)],
         help_text="Minimum days needed to prepare this product. Required for cakes."
     )
     
@@ -166,37 +165,42 @@ class Product(models.Model):
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
 
+    
+    # ========== UPDATED CLEAN METHOD ==========
     def clean(self):
         """
         Custom validation based on product_type.
         """
         from django.core.exceptions import ValidationError
         
+        # For cakes: validate required fields
         if self.product_type == 'cake':
-            # Validate required fields for cakes
+            errors = {}
+            
             if not self.layers:
-                raise ValidationError({'layers': 'Layers is required for cakes.'})
+                errors['layers'] = 'Layers is required for cakes.'
+            elif self.layers < 1:
+                errors['layers'] = 'Cake must have at least 1 layer.'
+            
             if not self.covering:
-                raise ValidationError({'covering': 'Covering type is required for cakes.'})
+                errors['covering'] = 'Covering type is required for cakes.'
+            
             if not self.preparation_days:
-                raise ValidationError({'preparation_days': 'Preparation days is required for cakes.'})
+                errors['preparation_days'] = 'Preparation days is required for cakes.'
+            elif self.preparation_days < 1:
+                errors['preparation_days'] = 'Preparation days must be at least 1.'
             
-            # Additional cake-specific validation
-            if self.layers < 1:
-                raise ValidationError({'layers': 'Cake must have at least 1 layer.'})
-            if self.preparation_days < 1:
-                raise ValidationError({'preparation_days': 'Preparation days must be at least 1.'})
-            
+            if errors:
+                raise ValidationError(errors)
+        
+        # For pastries: ensure cake fields are NULL/empty
         elif self.product_type == 'pastry':
-            if self.layers not in [None, '']:
-                raise ValidationError({'layers': 'Layers field should be empty for pastries.'})
-            if self.covering not in [None, '']:
-                raise ValidationError({'covering': 'Covering field should be empty for pastries.'})
-            if self.inspiration not in [None, '']:
-                raise ValidationError({'inspiration': 'Inspiration field should be empty for pastries.'})
-            if self.preparation_days not in [None, '']:
-                raise ValidationError({'preparation_days': 'Preparation days should be empty for pastries.'})
-            
+            # Force these fields to be None (NULL in database)
+            self.layers = None
+            self.covering = None
+            self.inspiration = None
+            self.preparation_days = None
+        
         super().clean()
 
     @property
