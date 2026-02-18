@@ -48,7 +48,7 @@ class Order(models.Model):
     """
     Main Order model that stores customer orders.
     Links to Cart and tracks order status and payment.
-    Tax and discount fields removed for MVP.
+    Payment method is Flutterwave only.
     """
     
     # Order Identification
@@ -138,7 +138,7 @@ class Order(models.Model):
         help_text="Current order status"
     )
     
-    # Payment Information
+    # Payment Information - Simplified for Flutterwave
     payment_status = models.CharField(
         max_length=20,
         choices=PAYMENT_STATUS_CHOICES,
@@ -147,17 +147,34 @@ class Order(models.Model):
         help_text="Payment status"
     )
     
+    # Payment method is always Flutterwave - we can keep this for reference
+    # but make it non-editable with a default
     payment_method = models.CharField(
         max_length=20,
-        choices=PAYMENT_METHOD_CHOICES,
-        blank=True,
-        help_text="How customer will pay"
+        default='flutterwave',
+        editable=False,  # Make it non-editable since it's always Flutterwave
+        help_text="Payment method (always Flutterwave)"
     )
     
-    payment_transaction_id = models.CharField(
+    # Flutterwave specific fields
+    flutterwave_transaction_id = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Payment gateway transaction ID"
+        db_index=True,
+        help_text="Flutterwave transaction ID"
+    )
+    
+    flutterwave_reference = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        help_text="Flutterwave payment reference"
+    )
+    
+    flutterwave_response = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Full Flutterwave response for reference"
     )
     
     payment_date = models.DateTimeField(
@@ -227,6 +244,8 @@ class Order(models.Model):
             models.Index(fields=['user', '-created_at']),
             models.Index(fields=['status']),
             models.Index(fields=['payment_status']),
+            models.Index(fields=['flutterwave_transaction_id']),
+            models.Index(fields=['flutterwave_reference']),
             models.Index(fields=['created_at']),
         ]
     
@@ -240,6 +259,10 @@ class Order(models.Model):
             date_str = now().strftime('%Y%m%d')
             short_uuid = str(uuid.uuid4())[:8].upper()
             self.order_number = f"ORD-{date_str}-{short_uuid}"
+        
+        # Ensure payment_method is always flutterwave
+        self.payment_method = 'flutterwave'
+        
         super().save(*args, **kwargs)
     
     @property
@@ -269,6 +292,28 @@ class Order(models.Model):
     @property
     def is_paid(self):
         return self.payment_status == 'paid'
+    
+    @property
+    def flutterwave_payload(self):
+        """
+        Generate Flutterwave payment payload for this order.
+        Useful when redirecting to Flutterwave payment page.
+        """
+        return {
+            'tx_ref': self.flutterwave_reference or self.order_number,
+            'amount': str(self.total_amount),
+            'currency': 'NGN',
+            'redirect_url': '/payment/callback/',  # Configure this
+            'customer': {
+                'email': self.customer_email,
+                'name': self.customer_name,
+                'phone_number': self.customer_phone,
+            },
+            'customizations': {
+                'title': 'M&C Bakery Order',
+                'description': f'Order #{self.order_number}',
+            }
+        }
     
     def get_status_display_color(self):
         """Get color for status display (for admin UI)"""
@@ -324,7 +369,36 @@ class Order(models.Model):
             old_value=old_status,
             new_value=new_status
         )
-
+    
+    def update_payment(self, payment_status, transaction_id=None, reference=None, response_data=None):
+        """
+        Update payment information after Flutterwave callback.
+        """
+        old_status = self.payment_status
+        self.payment_status = payment_status
+        
+        if transaction_id:
+            self.flutterwave_transaction_id = transaction_id
+        
+        if reference:
+            self.flutterwave_reference = reference
+        
+        if response_data:
+            self.flutterwave_response = response_data
+        
+        if payment_status == 'paid' and not self.payment_date:
+            self.payment_date = now()
+        
+        self.save()
+        
+        # Create history entry
+        OrderHistory.objects.create(
+            order=self,
+            action='payment_received' if payment_status == 'paid' else 'status_changed',
+            description=f"Payment status changed from {old_status} to {payment_status}",
+            old_value=old_status,
+            new_value=payment_status
+        )
 
 # ============================================================================
 # ORDER DELIVERY MODEL (SEPARATE, MATCHES CART PATTERN)

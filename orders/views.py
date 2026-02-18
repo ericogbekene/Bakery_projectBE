@@ -1,718 +1,319 @@
-# from django.shortcuts import get_object_or_404
-# from django.http import JsonResponse
-# from rest_framework.views import APIView
-# from rest_framework.response import Response
-# from rest_framework import status
-# from rest_framework.permissions import AllowAny, IsAuthenticated
-# from django.utils.timezone import now
-# from django.db import transaction
-# from decimal import Decimal
-# import uuid
+from rest_framework import generics, status, permissions
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+from django.db import transaction
+from django.utils.timezone import now
+from decimal import Decimal
 
-# from products.models import Product
-# from .models import (
-#     Cart, CartItem, Order, OrderItem, OrderHistory, OrderPayment,
-#     CakeCustomizationOption, CakeSizePrice, CakeFlavorPrice
-# )
-# from .utils import get_or_create_cart, clear_cart
-# from .serializers import (
-#     CartItemDetailSerializer, CartSummarySerializer,
-#     CartItemCreateUpdateSerializer
-# )
+from orders.models import Order, OrderHistory, OrderPayment
+from cart.models import Cart, DeliveryInfo
+from .serializers import (
+    OrderListSerializer, OrderDetailSerializer, CreateOrderSerializer,
+    OrderCancelSerializer, OrderStatusUpdateSerializer, OrderPaymentUpdateSerializer
+)
 
 
-# # ============================================================================
-# # ORDER CREATION & CHECKOUT VIEWS
-# # ============================================================================
-
-# class CheckoutAPIView(APIView):
-#     """
-#     Checkout page - Get cart and calculate taxes/fees.
-    
-#     GET /api/checkout/
-    
-#     Returns:
-#     {
-#         "success": true,
-#         "cart": {...},
-#         "tax_rate": 0.1,
-#         "delivery_fee": 1000.00,
-#         "estimated_total": 53250.00
-#     }
-#     """
-#     permission_classes = [AllowAny]
-    
-#     def get(self, request):
-#         try:
-#             cart = get_or_create_cart(request)
-            
-#             if not cart.items.exists():
-#                 return Response({
-#                     'success': False,
-#                     'error': 'Cart is empty'
-#                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-#             # Calculate taxes and fees
-#             TAX_RATE = Decimal('0.10')  # 10% tax
-#             DELIVERY_FEE = Decimal('1000.00')  # ₦1,000
-            
-#             subtotal = cart.total_price
-#             tax_amount = (subtotal * TAX_RATE).quantize(Decimal('0.01'))
-#             estimated_total = subtotal + tax_amount + DELIVERY_FEE
-            
-#             return Response({
-#                 'success': True,
-#                 'cart': {
-#                     'id': cart.id,
-#                     'items': CartItemDetailSerializer(cart.items.all(), many=True).data,
-#                     'subtotal': str(subtotal),
-#                     'item_count': cart.item_count,
-#                 },
-#                 'tax_rate': float(TAX_RATE),
-#                 'tax_amount': str(tax_amount),
-#                 'delivery_fee': str(DELIVERY_FEE),
-#                 'estimated_total': str(estimated_total),
-#             }, status=status.HTTP_200_OK)
+class IsOrderOwnerOrAdmin(permissions.BasePermission):
+    """
+    Custom permission to only allow owners of an order or admins to view it.
+    """
+    def has_object_permission(self, request, view, obj):
+        # Admin can do anything
+        if request.user and request.user.is_staff:
+            return True
         
-#         except Exception as e:
-#             return Response({
-#                 'success': False,
-#                 'error': str(e)
-#             }, status=status.HTTP_400_BAD_REQUEST)
-
-
-# class CreateOrderAPIView(APIView):
-#     """
-#     Create order from cart.
-    
-#     POST /api/orders/create/
-    
-#     Body:
-#     {
-#         "delivery_address": "123 Main St, Apt 4B",
-#         "delivery_city": "Abuja",
-#         "delivery_phone": "+234 701 234 5678",
-#         "delivery_date": "2024-02-15",
-#         "delivery_time": "14:00",  # optional
-#         "special_instructions": "Ring doorbell twice",
-#         "discount_code": "SAVE10"  # optional
-#     }
-    
-#     Response:
-#     {
-#         "success": true,
-#         "order": {
-#             "order_number": "ORD-20240129-ABC12345",
-#             "total_amount": "53250.00",
-#             "status": "pending",
-#             "payment_status": "pending"
-#         }
-#     }
-#     """
-#     permission_classes = [AllowAny]
-    
-#     @transaction.atomic
-#     def post(self, request):
-#         try:
-#             # Get cart
-#             cart = get_or_create_cart(request)
-            
-#             if not cart.items.exists():
-#                 return Response({
-#                     'success': False,
-#                     'error': 'Cart is empty'
-#                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-#             # Validate required fields
-#             required_fields = [
-#                 'delivery_address',
-#                 'delivery_city',
-#                 'delivery_phone',
-#                 'delivery_date'
-#             ]
-            
-#             for field in required_fields:
-#                 if not request.data.get(field):
-#                     return Response({
-#                         'success': False,
-#                         'error': f'{field} is required'
-#                     }, status=status.HTTP_400_BAD_REQUEST)
-            
-#             # Calculate totals
-#             TAX_RATE = Decimal('0.10')
-#             DELIVERY_FEE = Decimal('1000.00')
-            
-#             subtotal = cart.total_price
-#             tax_amount = (subtotal * TAX_RATE).quantize(Decimal('0.01'))
-            
-#             # Handle discount
-#             discount_amount = Decimal('0.00')
-#             discount_code = request.data.get('discount_code', '')
-#             # TODO: Implement discount code validation
-            
-#             total_amount = subtotal + tax_amount + DELIVERY_FEE - discount_amount
-            
-#             # Create order
-#             order = Order.objects.create(
-#                 user=request.user if request.user.is_authenticated else None,
-#                 guest_email=request.data.get('guest_email', ''),
-#                 guest_phone=request.data.get('guest_phone', ''),
-#                 cart=cart,
-#                 delivery_address=request.data['delivery_address'],
-#                 delivery_city=request.data['delivery_city'],
-#                 delivery_phone=request.data['delivery_phone'],
-#                 delivery_date=request.data['delivery_date'],
-#                 delivery_time=request.data.get('delivery_time'),
-#                 special_instructions=request.data.get('special_instructions', ''),
-#                 subtotal=subtotal,
-#                 tax_amount=tax_amount,
-#                 delivery_fee=DELIVERY_FEE,
-#                 discount_amount=discount_amount,
-#                 discount_code=discount_code,
-#                 total_amount=total_amount,
-#                 status='pending',
-#                 payment_status='pending'
-#             )
-            
-#             # Create order items from cart items
-#             for cart_item in cart.items.all():
-#                 OrderItem.objects.create(
-#                     order=order,
-#                     product=cart_item.product,
-#                     quantity=cart_item.quantity,
-#                     flavour_1=cart_item.flavour_1,
-#                     flavour_2=cart_item.flavour_2,
-#                     size=cart_item.size,
-#                     colours=cart_item.colours,
-#                     cake_topper=cart_item.cake_topper,
-#                     candle=cart_item.candle,
-#                     birthday_card=cart_item.birthday_card,
-#                     chocolate=cart_item.chocolate,
-#                     wine=cart_item.wine,
-#                     whiskey_200ml=cart_item.whiskey_200ml,
-#                     additional_notes=cart_item.additional_notes,
-#                     base_price=cart_item.base_price,
-#                     customization_cost=cart_item.customization_cost,
-#                     unit_price=cart_item.unit_price
-#                 )
-            
-#             # Add history entry
-#             OrderHistory.objects.create(
-#                 order=order,
-#                 action='created',
-#                 description='Order created',
-#                 changed_by=request.user if request.user.is_authenticated else None
-#             )
-            
-#             # Clear/deactivate cart
-#             cart.is_active = False
-#             cart.save()
-            
-#             return Response({
-#                 'success': True,
-#                 'order': {
-#                     'order_number': order.order_number,
-#                     'id': order.id,
-#                     'total_amount': str(order.total_amount),
-#                     'status': order.status,
-#                     'payment_status': order.payment_status,
-#                     'created_at': order.created_at.isoformat(),
-#                 },
-#                 'message': f'Order {order.order_number} created successfully'
-#             }, status=status.HTTP_201_CREATED)
+        # Order owner (user or guest session) can view
+        if obj.user and obj.user == request.user:
+            return True
         
-#         except Exception as e:
-#             return Response({
-#                 'success': False,
-#                 'error': str(e)
-#             }, status=status.HTTP_400_BAD_REQUEST)
-
-
-# # ============================================================================
-# # PAYMENT VIEWS
-# # ============================================================================
-
-# class InitiatePaymentAPIView(APIView):
-#     """
-#     Initiate payment for an order.
-    
-#     POST /api/orders/{order_number}/pay/
-    
-#     Body:
-#     {
-#         "payment_method": "stripe",  // or "card", "bank_transfer", "paypal", "cash"
-#         "payment_token": "tok_visa"   // token from payment gateway
-#     }
-    
-#     Response:
-#     {
-#         "success": true,
-#         "payment": {
-#             "transaction_id": "ch_1234567890",
-#             "status": "paid",
-#             "amount": "53250.00"
-#         }
-#     }
-#     """
-#     permission_classes = [AllowAny]
-    
-#     @transaction.atomic
-#     def post(self, request, order_number):
-#         try:
-#             order = Order.objects.get(order_number=order_number)
-            
-#             # Verify order ownership
-#             if order.user and order.user != request.user:
-#                 if not request.user.is_staff:
-#                     return Response({
-#                         'success': False,
-#                         'error': 'Unauthorized'
-#                     }, status=status.HTTP_403_FORBIDDEN)
-            
-#             payment_method = request.data.get('payment_method')
-            
-#             if not payment_method:
-#                 return Response({
-#                     'success': False,
-#                     'error': 'payment_method is required'
-#                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-#             # TODO: Integrate with payment gateway
-#             # For now, create transaction record
-            
-#             transaction_id = f"{payment_method.upper()}-{str(uuid.uuid4())[:12].upper()}"
-            
-#             # Create payment record
-#             payment = OrderPayment.objects.create(
-#                 order=order,
-#                 amount=order.total_amount,
-#                 payment_method=payment_method,
-#                 transaction_id=transaction_id,
-#                 status='paid',  # In production, this would depend on gateway response
-#                 processed_at=now()
-#             )
-            
-#             # Update order
-#             order.payment_status = 'paid'
-#             order.payment_date = now()
-#             order.payment_transaction_id = transaction_id
-#             order.save()
-            
-#             # Add history entry
-#             OrderHistory.objects.create(
-#                 order=order,
-#                 action='payment_received',
-#                 description=f'Payment received via {payment_method}',
-#                 changed_by=request.user if request.user.is_authenticated else None,
-#                 old_value='pending',
-#                 new_value='paid'
-#             )
-            
-#             return Response({
-#                 'success': True,
-#                 'payment': {
-#                     'transaction_id': payment.transaction_id,
-#                     'amount': str(payment.amount),
-#                     'status': payment.status,
-#                     'payment_method': payment.payment_method,
-#                     'created_at': payment.created_at.isoformat(),
-#                 },
-#                 'order': {
-#                     'order_number': order.order_number,
-#                     'payment_status': order.payment_status,
-#                     'status': order.status,
-#                 }
-#             }, status=status.HTTP_200_OK)
+        # Guest checkout - check session
+        if not obj.user and request.session.session_key:
+            # This would need session tracking - implement if needed
+            pass
         
-#         except Order.DoesNotExist:
-#             return Response({
-#                 'success': False,
-#                 'error': 'Order not found'
-#             }, status=status.HTTP_404_NOT_FOUND)
+        return False
+
+
+class OrderListView(generics.ListAPIView):
+    """
+    GET /api/orders/
+    
+    List orders for the current user.
+    - Authenticated users: see their own orders
+    - Admin users: see all orders (with filters)
+    - Guest users: see orders from their session (if implemented)
+    """
+    serializer_class = OrderListSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    
+    def get_queryset(self):
+        user = self.request.user
         
-#         except Exception as e:
-#             return Response({
-#                 'success': False,
-#                 'error': str(e)
-#             }, status=status.HTTP_400_BAD_REQUEST)
-
-
-# # ============================================================================
-# # ORDER MANAGEMENT VIEWS
-# # ============================================================================
-
-# class OrderDetailAPIView(APIView):
-#     """
-#     Get order details.
-    
-#     GET /api/orders/{order_number}/
-    
-#     Response:
-#     {
-#         "success": true,
-#         "order": {
-#             "order_number": "ORD-20240129-ABC12345",
-#             "customer": "John Doe",
-#             "status": "confirmed",
-#             "payment_status": "paid",
-#             "items": [...],
-#             "total_amount": "53250.00",
-#             "delivery_address": "...",
-#             "delivery_date": "2024-02-15"
-#         }
-#     }
-#     """
-#     permission_classes = [AllowAny]
-    
-#     def get(self, request, order_number):
-#         try:
-#             order = Order.objects.get(order_number=order_number)
+        # Admin can see all orders
+        if user.is_staff:
+            queryset = Order.objects.all()
             
-#             # Verify access
-#             if order.user and order.user != request.user:
-#                 if not request.user.is_staff:
-#                     return Response({
-#                         'success': False,
-#                         'error': 'Unauthorized'
-#                     }, status=status.HTTP_403_FORBIDDEN)
+            # Apply filters
+            status_filter = self.request.query_params.get('status')
+            if status_filter:
+                queryset = queryset.filter(status=status_filter)
             
-#             # Get items
-#             items = []
-#             for item in order.items.all():
-#                 items.append({
-#                     'id': item.id,
-#                     'product': item.product.name if item.product else 'Unknown',
-#                     'quantity': item.quantity,
-#                     'flavours': f"{item.flavour_1}" + (f" + {item.flavour_2}" if item.flavour_2 else ""),
-#                     'size': item.size,
-#                     'customizations': item.get_addons_summary(),
-#                     'unit_price': str(item.unit_price),
-#                     'item_total': str(item.item_total),
-#                     'special_notes': item.additional_notes,
-#                 })
+            date_from = self.request.query_params.get('date_from')
+            if date_from:
+                queryset = queryset.filter(created_at__date__gte=date_from)
             
-#             # Get payment info
-#             payments = []
-#             for payment in order.payments.all():
-#                 payments.append({
-#                     'transaction_id': payment.transaction_id,
-#                     'amount': str(payment.amount),
-#                     'payment_method': payment.payment_method,
-#                     'status': payment.status,
-#                     'created_at': payment.created_at.isoformat(),
-#                 })
+            date_to = self.request.query_params.get('date_to')
+            if date_to:
+                queryset = queryset.filter(created_at__date__lte=date_to)
             
-#             # Get history
-#             history = []
-#             for h in order.history.all():
-#                 history.append({
-#                     'action': h.get_action_display(),
-#                     'description': h.description,
-#                     'changed_by': h.changed_by.username if h.changed_by else 'System',
-#                     'timestamp': h.timestamp.isoformat(),
-#                 })
-            
-#             return Response({
-#                 'success': True,
-#                 'order': {
-#                     'order_number': order.order_number,
-#                     'customer_name': order.customer_name,
-#                     'customer_email': order.customer_email,
-#                     'customer_phone': order.customer_phone,
-#                     'status': order.status,
-#                     'status_display': order.get_status_display(),
-#                     'payment_status': order.payment_status,
-#                     'payment_status_display': order.get_payment_status_display(),
-#                     'payment_method': order.payment_method,
-#                     'items': items,
-#                     'delivery': {
-#                         'address': order.delivery_address,
-#                         'city': order.delivery_city,
-#                         'phone': order.delivery_phone,
-#                         'date': order.delivery_date.isoformat(),
-#                         'time': order.delivery_time.isoformat() if order.delivery_time else None,
-#                         'special_instructions': order.special_instructions,
-#                     },
-#                     'pricing': {
-#                         'subtotal': str(order.subtotal),
-#                         'tax': str(order.tax_amount),
-#                         'delivery_fee': str(order.delivery_fee),
-#                         'discount': str(order.discount_amount),
-#                         'discount_code': order.discount_code,
-#                         'total': str(order.total_amount),
-#                     },
-#                     'timeline': {
-#                         'created': order.created_at.isoformat(),
-#                         'confirmed': order.confirmed_at.isoformat() if order.confirmed_at else None,
-#                         'completed': order.completed_at.isoformat() if order.completed_at else None,
-#                     },
-#                     'payments': payments,
-#                     'history': history,
-#                 }
-#             }, status=status.HTTP_200_OK)
+            return queryset.order_by('-created_at')
         
-#         except Order.DoesNotExist:
-#             return Response({
-#                 'success': False,
-#                 'error': 'Order not found'
-#             }, status=status.HTTP_404_NOT_FOUND)
-
-
-# class OrderListAPIView(APIView):
-#     """
-#     List customer's orders.
-    
-#     GET /api/orders/
-    
-#     Response:
-#     {
-#         "success": true,
-#         "orders": [
-#             {
-#                 "order_number": "ORD-20240129-ABC12345",
-#                 "status": "confirmed",
-#                 "total_amount": "53250.00",
-#                 "created_at": "2024-01-29T10:00:00Z"
-#             }
-#         ]
-#     }
-#     """
-#     permission_classes = [IsAuthenticated]
-    
-#     def get(self, request):
-#         try:
-#             orders = Order.objects.filter(user=request.user).order_by('-created_at')
-            
-#             orders_data = []
-#             for order in orders:
-#                 orders_data.append({
-#                     'order_number': order.order_number,
-#                     'status': order.status,
-#                     'status_display': order.get_status_display(),
-#                     'payment_status': order.payment_status,
-#                     'total_amount': str(order.total_amount),
-#                     'delivery_date': order.delivery_date.isoformat(),
-#                     'created_at': order.created_at.isoformat(),
-#                     'item_count': order.items.count(),
-#                 })
-            
-#             return Response({
-#                 'success': True,
-#                 'orders': orders_data,
-#                 'count': len(orders_data),
-#             }, status=status.HTTP_200_OK)
+        # Regular authenticated users see their own orders
+        if user.is_authenticated:
+            return Order.objects.filter(user=user).order_by('-created_at')
         
-#         except Exception as e:
-#             return Response({
-#                 'success': False,
-#                 'error': str(e)
-#             }, status=status.HTTP_400_BAD_REQUEST)
+        # Guest users - return empty for now
+        # Could implement session-based order lookup
+        return Order.objects.none()
 
 
-# class ConfirmOrderAPIView(APIView):
-#     """
-#     Confirm order (admin only).
+class OrderDetailView(generics.RetrieveAPIView):
+    """
+    GET /api/orders/<id>/
     
-#     POST /api/orders/{order_number}/confirm/
+    Get detailed information about a specific order.
+    """
+    queryset = Order.objects.all()
+    serializer_class = OrderDetailSerializer
+    permission_classes = [IsOrderOwnerOrAdmin]
+    lookup_field = 'id'
+
+
+class CreateOrderView(APIView):
+    """
+    POST /api/orders/create/
     
-#     Response:
-#     {
-#         "success": true,
-#         "order": {
-#             "order_number": "ORD-20240129-ABC12345",
-#             "status": "confirmed",
-#             "confirmed_at": "2024-01-29T11:00:00Z"
-#         }
-#     }
-#     """
-#     permission_classes = [IsAuthenticated]
+    Create a new order from the current cart.
+    """
+    permission_classes = [permissions.AllowAny]
     
-#     @transaction.atomic
-#     def post(self, request, order_number):
-#         try:
-#             if not request.user.is_staff:
-#                 return Response({
-#                     'success': False,
-#                     'error': 'Only staff can confirm orders'
-#                 }, status=status.HTTP_403_FORBIDDEN)
-            
-#             order = Order.objects.get(order_number=order_number)
-            
-#             if order.status != 'pending':
-#                 return Response({
-#                     'success': False,
-#                     'error': f'Cannot confirm order in {order.status} status'
-#                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-#             order.status = 'confirmed'
-#             order.confirmed_at = now()
-#             order.save()
-            
-#             OrderHistory.objects.create(
-#                 order=order,
-#                 action='confirmed',
-#                 description='Order confirmed by admin',
-#                 changed_by=request.user,
-#                 old_value='pending',
-#                 new_value='confirmed'
-#             )
-            
-#             return Response({
-#                 'success': True,
-#                 'order': {
-#                     'order_number': order.order_number,
-#                     'status': order.status,
-#                     'confirmed_at': order.confirmed_at.isoformat(),
-#                 }
-#             }, status=status.HTTP_200_OK)
+    @transaction.atomic
+    def post(self, request):
+        serializer = CreateOrderSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
         
-#         except Order.DoesNotExist:
-#             return Response({
-#                 'success': False,
-#                 'error': 'Order not found'
-#             }, status=status.HTTP_404_NOT_FOUND)
-
-
-# class UpdateOrderStatusAPIView(APIView):
-#     """
-#     Update order status (admin only).
-    
-#     PUT /api/orders/{order_number}/status/
-    
-#     Body:
-#     {
-#         "status": "processing",  // or "ready", "completed", "cancelled"
-#         "notes": "Order is being prepared"
-#     }
-#     """
-#     permission_classes = [IsAuthenticated]
-    
-#     @transaction.atomic
-#     def put(self, request, order_number):
-#         try:
-#             if not request.user.is_staff:
-#                 return Response({
-#                     'success': False,
-#                     'error': 'Only staff can update order status'
-#                 }, status=status.HTTP_403_FORBIDDEN)
-            
-#             order = Order.objects.get(order_number=order_number)
-#             new_status = request.data.get('status')
-#             notes = request.data.get('notes', '')
-            
-#             if not new_status:
-#                 return Response({
-#                     'success': False,
-#                     'error': 'status is required'
-#                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-#             # Validate status
-#             valid_statuses = ['pending', 'confirmed', 'processing', 'ready', 'completed', 'cancelled']
-#             if new_status not in valid_statuses:
-#                 return Response({
-#                     'success': False,
-#                     'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
-#                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-#             old_status = order.status
-#             order.status = new_status
-            
-#             if new_status == 'completed':
-#                 order.completed_at = now()
-#             elif new_status == 'cancelled':
-#                 order.cancelled_at = now()
-#                 order.cancellation_reason = notes
-            
-#             order.save()
-            
-#             OrderHistory.objects.create(
-#                 order=order,
-#                 action=new_status,
-#                 description=notes or f'Status changed to {new_status}',
-#                 changed_by=request.user,
-#                 old_value=old_status,
-#                 new_value=new_status
-#             )
-            
-#             return Response({
-#                 'success': True,
-#                 'order': {
-#                     'order_number': order.order_number,
-#                     'status': order.status,
-#                     'updated_at': order.updated_at.isoformat(),
-#                 }
-#             }, status=status.HTTP_200_OK)
+        data = serializer.validated_data
+        cart = serializer.context['cart']
         
-#         except Order.DoesNotExist:
-#             return Response({
-#                 'success': False,
-#                 'error': 'Order not found'
-#             }, status=status.HTTP_404_NOT_FOUND)
-
-
-# class CancelOrderAPIView(APIView):
-#     """
-#     Cancel order.
-    
-#     POST /api/orders/{order_number}/cancel/
-    
-#     Body:
-#     {
-#         "reason": "Changed my mind"
-#     }
-#     """
-#     permission_classes = [AllowAny]
-    
-#     @transaction.atomic
-#     def post(self, request, order_number):
-#         try:
-#             order = Order.objects.get(order_number=order_number)
-            
-#             # Verify access
-#             if order.user and order.user != request.user:
-#                 if not request.user.is_staff:
-#                     return Response({
-#                         'success': False,
-#                         'error': 'Unauthorized'
-#                     }, status=status.HTTP_403_FORBIDDEN)
-            
-#             if order.status == 'cancelled':
-#                 return Response({
-#                     'success': False,
-#                     'error': 'Order is already cancelled'
-#                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-#             if order.status == 'completed':
-#                 return Response({
-#                     'success': False,
-#                     'error': 'Cannot cancel completed order'
-#                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-#             reason = request.data.get('reason', 'No reason provided')
-            
-#             order.status = 'cancelled'
-#             order.cancelled_at = now()
-#             order.cancellation_reason = reason
-#             order.save()
-            
-#             OrderHistory.objects.create(
-#                 order=order,
-#                 action='cancelled',
-#                 description=reason,
-#                 changed_by=request.user if request.user.is_authenticated else None
-#             )
-            
-#             return Response({
-#                 'success': True,
-#                 'order': {
-#                     'order_number': order.order_number,
-#                     'status': order.status,
-#                     'cancelled_at': order.cancelled_at.isoformat(),
-#                 }
-#             }, status=status.HTTP_200_OK)
+        # Get or create delivery info from cart
+        delivery_info, _ = DeliveryInfo.objects.get_or_create(cart=cart)
         
-#         except Order.DoesNotExist:
-#             return Response({
-#                 'success': False,
-#                 'error': 'Order not found'
-#             }, status=status.HTTP_404_NOT_FOUND)
+        # Prepare delivery data
+        delivery_data = {
+            'address': data['delivery_address'],
+            'city': data['delivery_city'],
+            'state': data.get('delivery_state', ''),
+            'postal_code': data.get('delivery_postal_code', ''),
+            'delivery_date': data['delivery_date'],
+            'delivery_time_slot': data.get('delivery_time_slot', ''),
+            'special_instructions': data.get('special_instructions', ''),
+            'delivery_fee': cart.delivery_cost,  # Will be calculated by delivery app
+        }
+        
+        # Create order using utility function
+        from orders.models import create_order_from_cart
+        order = create_order_from_cart(
+            cart=cart,
+            customer_data={
+                'name': data['customer_name'],
+                'email': data['customer_email'],
+                'phone': data['customer_phone'],
+            },
+            delivery_data=delivery_data,
+            payment_method=data.get('payment_method', '')
+        )
+        
+        # Return order details
+        response_serializer = OrderDetailSerializer(order)
+        return Response({
+            'message': 'Order created successfully.',
+            'order': response_serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+
+class CancelOrderView(APIView):
+    """
+    PUT /api/orders/<id>/cancel/
+    
+    Cancel an order (if within cancellation window).
+    """
+    permission_classes = [IsOrderOwnerOrAdmin]
+    
+    def put(self, request, id):
+        order = get_object_or_404(Order, id=id)
+        self.check_object_permissions(request, order)
+        
+        serializer = OrderCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Check if order can be cancelled
+        if order.status in ['completed', 'cancelled']:
+            return Response({
+                'error': f'Order cannot be cancelled. Current status: {order.get_status_display()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update order status
+        reason = serializer.validated_data.get('reason', '')
+        order.update_status('cancelled', request.user if request.user.is_authenticated else None, reason)
+        
+        return Response({
+            'message': 'Order cancelled successfully.',
+            'order': OrderDetailSerializer(order).data
+        })
+
+
+class TrackOrderView(APIView):
+    """
+    GET /api/orders/<id>/track/
+    
+    Track order status and timeline.
+    Public endpoint - no authentication required (uses order number).
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request, id):
+        order = get_object_or_404(Order, id=id)
+        
+        # Basic info for tracking
+        data = {
+            'order_number': order.order_number,
+            'status': order.status,
+            'status_display': order.get_status_display(),
+            'status_color': order.get_status_display_color(),
+            'created_at': order.created_at,
+            'estimated_ready_date': None,  # Calculate based on preparation_days
+            'timeline': []
+        }
+        
+        # Build timeline from history
+        for history in order.history.all().order_by('timestamp')[:10]:
+            data['timeline'].append({
+                'action': history.get_action_display(),
+                'description': history.description,
+                'timestamp': history.timestamp
+            })
+        
+        return Response(data)
+
+
+# ============================================================================
+# ADMIN ONLY VIEWS
+# ============================================================================
+
+class AdminOrderUpdateView(APIView):
+    """
+    PUT /api/orders/admin/<id>/update-status/
+    
+    Update order status (admin only).
+    """
+    permission_classes = [permissions.IsAdminUser]
+    
+    def put(self, request, id):
+        order = get_object_or_404(Order, id=id)
+        
+        serializer = OrderStatusUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        data = serializer.validated_data
+        new_status = data['status']
+        reason = data.get('reason', '')
+        notify = data.get('notify_customer', True)
+        
+        # Update status
+        order.update_status(new_status, request.user, reason)
+        
+        # TODO: Send notification if notify=True
+        
+        return Response({
+            'message': f'Order status updated to {order.get_status_display()}.',
+            'order': OrderDetailSerializer(order).data
+        })
+
+
+class AdminPaymentUpdateView(APIView):
+    """
+    PUT /api/orders/admin/<id>/update-payment/
+    
+    Update payment status (admin only).
+    """
+    permission_classes = [permissions.IsAdminUser]
+    
+    def put(self, request, id):
+        order = get_object_or_404(Order, id=id)
+        
+        serializer = OrderPaymentUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        data = serializer.validated_data
+        
+        # Update payment status
+        old_status = order.payment_status
+        order.payment_status = data['payment_status']
+        
+        if data.get('transaction_id'):
+            order.payment_transaction_id = data['transaction_id']
+        
+        if data['payment_status'] == 'paid' and not order.payment_date:
+            order.payment_date = now()
+        
+        order.save()
+        
+        # Create history entry
+        OrderHistory.objects.create(
+            order=order,
+            action='payment_received' if data['payment_status'] == 'paid' else 'status_changed',
+            description=f"Payment status changed from {old_status} to {data['payment_status']}",
+            changed_by=request.user,
+            old_value=old_status,
+            new_value=data['payment_status']
+        )
+        
+        return Response({
+            'message': f'Payment status updated to {order.get_payment_status_display()}.',
+            'order': OrderDetailSerializer(order).data
+        })
+
+
+class AdminOrderStatsView(APIView):
+    """
+    GET /api/orders/admin/stats/
+    
+    Get order statistics (admin only).
+    """
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request):
+        from django.db.models import Count, Sum
+        from django.utils.timezone import now
+        from datetime import timedelta
+        
+        today = now().date()
+        week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
+        
+        stats = {
+            'total_orders': Order.objects.count(),
+            'total_revenue': Order.objects.aggregate(total=Sum('total_amount'))['total'] or 0,
+            'orders_today': Order.objects.filter(created_at__date=today).count(),
+            'revenue_today': Order.objects.filter(created_at__date=today).aggregate(total=Sum('total_amount'))['total'] or 0,
+            'orders_this_week': Order.objects.filter(created_at__date__gte=week_ago).count(),
+            'orders_this_month': Order.objects.filter(created_at__date__gte=month_ago).count(),
+            'status_breakdown': Order.objects.values('status').annotate(count=Count('id')),
+            'payment_status_breakdown': Order.objects.values('payment_status').annotate(count=Count('id')),
+        }
+        
+        return Response(stats)
