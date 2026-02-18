@@ -9,12 +9,13 @@ from .models import (
 @admin.register(DeliveryZone)
 class DeliveryZoneAdmin(admin.ModelAdmin):
     list_display = [
-        'display_order', 'code', 'name', 'base_fee', 
+        'id', 'display_order', 'code', 'name', 'base_fee', 
         'free_delivery_threshold', 'estimated_delivery_days', 
-        'status_colored', 'area_count'
+        'status', 'status_colored', 'area_count'  # Added 'status' field
     ]
-    list_editable = ['base_fee', 'free_delivery_threshold']
-    list_filter = [ 'estimated_delivery_days']
+    list_display_links = ['id', 'name']
+    list_editable = ['display_order', 'base_fee', 'free_delivery_threshold', 'status']
+    list_filter = ['status', 'estimated_delivery_days', 'rush_delivery_available']
     search_fields = ['name', 'code', 'areas']
     ordering = ['display_order', 'name']
     
@@ -64,14 +65,29 @@ class DeliveryZoneAdmin(admin.ModelAdmin):
     def area_count(self, obj):
         return len(obj.area_list)
     area_count.short_description = 'Areas'
+    
+    # Add actions for bulk status updates
+    actions = ['activate_zones', 'deactivate_zones']
+    
+    def activate_zones(self, request, queryset):
+        updated = queryset.update(status='active')
+        self.message_user(request, f'{updated} zone(s) activated.')
+    activate_zones.short_description = "Activate selected zones"
+    
+    def deactivate_zones(self, request, queryset):
+        updated = queryset.update(status='inactive')
+        self.message_user(request, f'{updated} zone(s) deactivated.')
+    deactivate_zones.short_description = "Deactivate selected zones"
 
 
 @admin.register(DeliveryPricingRule)
 class DeliveryPricingRuleAdmin(admin.ModelAdmin):
     list_display = [
-        'name', 'rule_type', 'zone', 'fee_type', 'fee_value',
+        'id', 'name', 'rule_type', 'zone', 'fee_type', 'fee_value',
         'is_active', 'valid_date_range'
     ]
+    list_display_links = ['id', 'name']
+    list_editable = ['fee_value', 'is_active']
     list_filter = ['rule_type', 'fee_type', 'is_active', 'zone']
     search_fields = ['name', 'description']
     
@@ -114,12 +130,14 @@ class DeliveryPricingRuleAdmin(admin.ModelAdmin):
 @admin.register(DeliverySchedule)
 class DeliveryScheduleAdmin(admin.ModelAdmin):
     list_display = [
-        'zone', 'get_day_of_week_display', 'time_slot_name',
-        'start_time', 'end_time', 'capacity_status', 'is_active'
+        'id', 'zone', 'get_day_of_week_display', 'time_slot_name',
+        'start_time', 'end_time', 'max_orders_per_slot', 'current_orders',
+        'capacity_status', 'is_active'
     ]
+    list_display_links = ['id', 'zone']
+    list_editable = ['max_orders_per_slot', 'current_orders', 'is_active']
     list_filter = ['zone', 'day_of_week', 'is_active']
     search_fields = ['zone__name', 'time_slot_name']
-    list_editable = ['is_active']
     
     fieldsets = [
         ('Zone & Day', {
@@ -155,11 +173,21 @@ class DeliveryScheduleAdmin(admin.ModelAdmin):
             color, status
         )
     capacity_status.short_description = 'Capacity'
+    
+    # Add action to reset daily counters
+    actions = ['reset_daily_counters']
+    
+    def reset_daily_counters(self, request, queryset):
+        updated = queryset.update(current_orders=0)
+        self.message_user(request, f'{updated} schedule(s) counters reset.')
+    reset_daily_counters.short_description = "Reset daily order counters"
 
 
 @admin.register(DeliveryException)
 class DeliveryExceptionAdmin(admin.ModelAdmin):
-    list_display = ['date', 'title', 'exception_type', 'delivery_available', 'affected_zones']
+    list_display = ['id', 'date', 'title', 'exception_type', 'delivery_available', 'affected_zones']
+    list_display_links = ['id', 'title']
+    list_editable = ['delivery_available']
     list_filter = ['exception_type', 'delivery_available', 'date']
     search_fields = ['title', 'description']
     date_hierarchy = 'date'

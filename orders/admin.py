@@ -1,4 +1,3 @@
-# orders/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
@@ -78,12 +77,15 @@ class OrderPaymentInline(admin.TabularInline):
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
         'order_number', 'customer_info', 'order_total', 
-        'status_colored', 'payment_status_colored', 'created_at'
+        'status_colored', 'payment_status_colored', 'flutterwave_reference_display', 'created_at'
     ]
     list_filter = ['status', 'payment_status', 'created_at', 'delivery__city']
-    search_fields = ['order_number', 'customer_name', 'customer_email', 'customer_phone']
+    search_fields = ['order_number', 'customer_name', 'customer_email', 'customer_phone', 
+                     'flutterwave_transaction_id', 'flutterwave_reference']
     readonly_fields = [
         'order_number', 'user', 'cart', 'subtotal', 'delivery_fee', 'total_amount',
+        'payment_method',  # Add this as readonly since it's non-editable
+        'flutterwave_transaction_id', 'flutterwave_reference', 'flutterwave_response',
         'created_at', 'updated_at', 'confirmed_at', 'processing_at',
         'ready_at', 'completed_at', 'cancelled_at'
     ]
@@ -114,11 +116,18 @@ class OrderAdmin(admin.ModelAdmin):
                 'completed_at', 'cancelled_at', 'cancellation_reason'
             ]
         }),
-        ('Payment Information', {
+        ('Payment Information - Flutterwave', {
             'fields': [
-                'payment_status', 'payment_method', 
-                'payment_transaction_id', 'payment_date'
+                'payment_status', 
+                'payment_method',  # Will show as read-only
+                'flutterwave_transaction_id',
+                'flutterwave_reference',
+                'payment_date'
             ]
+        }),
+        ('Flutterwave Response Data', {
+            'fields': ['flutterwave_response'],
+            'classes': ['collapse']  # Collapsed by default since it's JSON
         }),
         ('Admin Notes', {
             'fields': ['admin_notes']
@@ -139,6 +148,16 @@ class OrderAdmin(admin.ModelAdmin):
     def order_total(self, obj):
         return f"₦{obj.total_amount:,.2f}"
     order_total.short_description = 'Total'
+    
+    def flutterwave_reference_display(self, obj):
+        """Display Flutterwave reference with link if available"""
+        if obj.flutterwave_reference:
+            return format_html(
+                '<span style="font-family: monospace;">{}</span>',
+                obj.flutterwave_reference[:15] + '...' if len(obj.flutterwave_reference) > 15 else obj.flutterwave_reference
+            )
+        return '-'
+    flutterwave_reference_display.short_description = 'Flutterwave Ref'
     
     def status_colored(self, obj):
         color = obj.get_status_display_color()

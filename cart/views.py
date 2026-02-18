@@ -16,6 +16,7 @@ from .serializers import (
     UpdateCartItemSerializer, PriceCalculationSerializer,
     DeliveryInfoSerializer, GuestCartMergeSerializer
 )
+from delivery.models import DeliveryService
 
 
 class CartDetailView(APIView):
@@ -259,6 +260,12 @@ class CartSummaryView(APIView):
 # DELIVERY INFO VIEWS
 # ============================================================================
 
+# At the top of cart/api/views.py, add:
+from delivery.models import DeliveryService
+
+
+# Update the DeliveryInfoView.post method:
+
 class DeliveryInfoView(APIView):
     """
     GET /api/cart/delivery/ - Get delivery info
@@ -292,8 +299,16 @@ class DeliveryInfoView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         
-        # TODO: Calculate delivery fee based on zone
-        # This will be implemented when delivery app is ready
+        # Calculate delivery fee based on city
+        if delivery_info.city:
+            result = DeliveryService.calculate_delivery_fee(
+                city=delivery_info.city,
+                order_total=cart.subtotal
+            )
+            
+            if result['available']:
+                delivery_info.calculated_fee = result['fee']
+                delivery_info.save()
         
         return Response({
             'message': 'Delivery information saved successfully.',
