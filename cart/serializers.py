@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from django.conf import settings
 from cart.models import Cart, CartItem, DeliveryInfo
 from products.models import Product
 from decimal import Decimal
@@ -56,33 +55,11 @@ class CartItemSerializer(serializers.ModelSerializer):
             'design_price': str(obj.base_price),
             'size_multiplier': str(obj.size_multiplier_value),
             'flavor_multiplier': str(obj.flavor_multiplier_value),
-            'customizations': obj.get_addons_breakdown(),
+            'addons': obj.get_addons_breakdown(),
             'unit_price': str(obj.unit_price),
             'quantity': obj.quantity,
             'total': str(obj.total_item_price)
         }
-    
-    def validate(self, data):
-        """
-        Validate cart item data.
-        """
-        product = data.get('product')
-        
-        # Only validate cakes
-        if product and product.is_cake:
-            # Size is required for cakes
-            if not data.get('size'):
-                raise serializers.ValidationError({
-                    'size': 'Size is required for cakes.'
-                })
-            
-            # At least one flavor required for cakes
-            if not data.get('flavour_1'):
-                raise serializers.ValidationError({
-                    'flavour_1': 'At least one flavor is required for cakes.'
-                })
-        
-        return data
 
 
 class AddToCartSerializer(serializers.Serializer):
@@ -93,10 +70,10 @@ class AddToCartSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=1, default=1)
     
     # Cake customization fields
-    flavour_1 = serializers.CharField(required=False, allow_blank=True)
-    flavour_2 = serializers.CharField(required=False, allow_blank=True)
-    size = serializers.CharField(required=False, allow_blank=True)
-    colours = serializers.CharField(required=False, allow_blank=True)
+    flavour_1 = serializers.CharField(required=False, allow_blank=True, default='')
+    flavour_2 = serializers.CharField(required=False, allow_blank=True, default='')
+    size = serializers.CharField(required=False, allow_blank=True, default='')
+    colours = serializers.CharField(required=False, allow_blank=True, default='')
     
     # Add-ons
     cake_topper = serializers.IntegerField(min_value=0, default=0)
@@ -106,7 +83,7 @@ class AddToCartSerializer(serializers.Serializer):
     wine = serializers.IntegerField(min_value=0, default=0)
     whiskey_200ml = serializers.IntegerField(min_value=0, default=0)
     
-    additional_notes = serializers.CharField(required=False, allow_blank=True)
+    additional_notes = serializers.CharField(required=False, allow_blank=True, default='')
     
     def validate(self, data):
         """
@@ -173,9 +150,9 @@ class PriceCalculationSerializer(serializers.Serializer):
     Serializer for real-time price calculation.
     """
     product_id = serializers.IntegerField()
-    size = serializers.CharField(required=False, allow_blank=True)
-    flavour_1 = serializers.CharField(required=False, allow_blank=True)
-    flavour_2 = serializers.CharField(required=False, allow_blank=True)
+    size = serializers.CharField(required=False, allow_blank=True, default='')
+    flavour_1 = serializers.CharField(required=False, allow_blank=True, default='')
+    flavour_2 = serializers.CharField(required=False, allow_blank=True, default='')
     
     # Add-ons
     cake_topper = serializers.IntegerField(min_value=0, default=0)

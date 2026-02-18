@@ -187,18 +187,19 @@ class Cart(models.Model):
     @property
     def total_price(self):
         """Calculate total price including all customizations"""
-        result = self.items.aggregate(
-            total=ExpressionWrapper(
-                Sum(F('total_item_price')),
-                output_field=DecimalField()
-            )
-        )
-        return result['total'] or Decimal('0.00')
+        total = Decimal('0.00')
+        # Use .all() to get all items and calculate in Python
+        for item in self.items.all():
+            total += item.total_item_price
+        return total
     
     @property
     def item_count(self):
-        result = self.items.aggregate(total=Sum('quantity'))
-        return result['total'] or 0
+        """Get total number of items in cart"""
+        total = 0
+        for item in self.items.all():
+            total += item.quantity
+        return total
     
     @property
     def subtotal(self):
@@ -214,7 +215,6 @@ class Cart(models.Model):
     def grand_total(self):
         """Total price including delivery"""
         return self.total_price + self.delivery_cost
-
 
 class CartItem(models.Model):
     """

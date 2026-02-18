@@ -75,7 +75,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     
     # Display helpers
     product_type_display = serializers.CharField(source='get_product_type_display', read_only=True)
-    
+
     class Meta:
         model = Product
         fields = [
@@ -105,9 +105,9 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     medium_image_url = serializers.ReadOnlyField()
     large_image_url = serializers.ReadOnlyField()
     
-    # Helper properties
-    is_cake = serializers.BooleanField(source='is_cake', read_only=True)
-    is_pastry = serializers.BooleanField(source='is_pastry', read_only=True)
+    # Helper properties - FIXED: removed redundant source arguments
+    is_cake = serializers.BooleanField(read_only=True)
+    is_pastry = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Product
@@ -159,55 +159,47 @@ class ProductCreateUpdateSerializer(serializers.ModelSerializer):
         
         # Validation for cakes
         if product_type == 'cake':
+            errors = {}
+            
             # Required fields for cakes
             if not data.get('layers') and not (self.instance and self.instance.layers):
-                raise serializers.ValidationError({
-                    'layers': 'Layers is required for cakes.'
-                })
+                errors['layers'] = 'Layers is required for cakes.'
             
             if not data.get('covering') and not (self.instance and self.instance.covering):
-                raise serializers.ValidationError({
-                    'covering': 'Covering type is required for cakes.'
-                })
+                errors['covering'] = 'Covering type is required for cakes.'
             
             if not data.get('preparation_days') and not (self.instance and self.instance.preparation_days):
-                raise serializers.ValidationError({
-                    'preparation_days': 'Preparation days is required for cakes.'
-                })
+                errors['preparation_days'] = 'Preparation days is required for cakes.'
             
             # Validate values
             if data.get('layers') and data['layers'] < 1:
-                raise serializers.ValidationError({
-                    'layers': 'Cake must have at least 1 layer.'
-                })
+                errors['layers'] = 'Cake must have at least 1 layer.'
             
             if data.get('preparation_days') and data['preparation_days'] < 1:
-                raise serializers.ValidationError({
-                    'preparation_days': 'Preparation days must be at least 1.'
-                })
+                errors['preparation_days'] = 'Preparation days must be at least 1.'
+            
+            if errors:
+                raise serializers.ValidationError(errors)
         
         # Validation for pastries
         elif product_type == 'pastry':
+            errors = {}
+            
             # Cake fields should be empty for pastries
             if data.get('layers'):
-                raise serializers.ValidationError({
-                    'layers': 'Layers field should not be set for pastries.'
-                })
+                errors['layers'] = 'Layers field should not be set for pastries.'
             
             if data.get('covering'):
-                raise serializers.ValidationError({
-                    'covering': 'Covering field should not be set for pastries.'
-                })
+                errors['covering'] = 'Covering field should not be set for pastries.'
             
             if data.get('inspiration'):
-                raise serializers.ValidationError({
-                    'inspiration': 'Inspiration field should not be set for pastries.'
-                })
+                errors['inspiration'] = 'Inspiration field should not be set for pastries.'
             
             if data.get('preparation_days'):
-                raise serializers.ValidationError({
-                    'preparation_days': 'Preparation days should not be set for pastries.'
-                })
+                errors['preparation_days'] = 'Preparation days should not be set for pastries.'
+            
+            if errors:
+                raise serializers.ValidationError(errors)
 
         return data
 
@@ -233,6 +225,9 @@ class ProductCakeDetailSerializer(serializers.ModelSerializer):
     medium_image_url = serializers.ReadOnlyField()
     large_image_url = serializers.ReadOnlyField()
     
+    # Helper properties
+    is_cake = serializers.BooleanField(read_only=True)
+    
     # Customization options will be added from cart app
     customization_options = serializers.SerializerMethodField()
 
@@ -242,7 +237,7 @@ class ProductCakeDetailSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'price', 'image_url', 
             'medium_image_url', 'large_image_url', 'category_name',
             'layers', 'covering', 'inspiration', 'preparation_days',
-            'customization_options'
+            'is_cake', 'customization_options'
         ]
 
     def get_customization_options(self, obj):
@@ -250,6 +245,10 @@ class ProductCakeDetailSerializer(serializers.ModelSerializer):
         Get available customization options from cart app.
         This will be populated when we implement the cart API.
         """
+        # Only return customization options for cakes
+        if not obj.is_cake:
+            return None
+            
         # Placeholder - will be implemented when cart API is built
         return {
             'sizes': [],  # Will come from CakeSizeMultiplier
