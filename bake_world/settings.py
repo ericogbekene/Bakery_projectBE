@@ -9,8 +9,8 @@ import cloudinary.api
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Production flag
-# IS_PRODUCTION = False
-IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
+IS_PRODUCTION = False
+# IS_PRODUCTION = config('IS_PRODUCTION', default=False, cast=bool)
 
 SECRET_KEY = config('DJANGO_SECRET_KEY', default=os.getenv("DJANGO_SECRET_KEY", "replace-this-in-production!"))
 DEBUG = config('DEBUG', default=True, cast=bool)
@@ -145,6 +145,7 @@ INSTALLED_APPS = [
     'orders.apps.OrdersConfig',
     'payment.apps.PaymentConfig',
     'accounts.apps.AccountsConfig',
+    'delivery.apps.DeliveryConfig',
 ]
 
 # Middleware
@@ -174,7 +175,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'cart.context_processors.cart',
             ],
         },
     },
@@ -208,20 +208,18 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 
-
+# Django REST Framework settings
 REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'products.pagination.StandardResultsSetPagination',
+    'PAGE_SIZE': 20,
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
-    
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
-    # ... other DRF settings
 }
 
 AUTH_USER_MODEL = 'accounts.CustomUser'

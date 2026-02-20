@@ -1,9 +1,22 @@
 from django.urls import path
-from .views import CartAddUpdateView, CartRemoveView, CartDetailView, CartClearView
+from . import views
+
+app_name = 'cart-api'
 
 urlpatterns = [
-    path('cart/add/', CartAddUpdateView.as_view(), name='cart-add'),
-    path('cart/remove/', CartRemoveView.as_view(), name='cart-remove'),
-    path('cart/', CartDetailView.as_view(), name='cart-detail'),
-    path('cart/clear/', CartClearView.as_view(), name='cart-clear'),
+    # Main cart endpoints
+    path('', views.CartDetailView.as_view(), name='cart-detail'),
+    path('add/', views.AddToCartView.as_view(), name='cart-add'),
+    path('count/', views.CartItemCountView.as_view(), name='cart-count'),
+    path('summary/', views.CartSummaryView.as_view(), name='cart-summary'),
+    path('calculate-price/', views.CalculatePriceView.as_view(), name='calculate-price'),
+    
+    # Cart item endpoints
+    path('items/<int:item_id>/', views.CartItemDetailView.as_view(), name='cart-item-detail'),
+    
+    # Delivery endpoints
+    path('delivery/', views.DeliveryInfoView.as_view(), name='cart-delivery'),
+    
+    # Guest cart merging (for authenticated users)
+    path('merge/', views.MergeGuestCartView.as_view(), name='cart-merge'),
 ]

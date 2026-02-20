@@ -1,20 +1,25 @@
 from django.db import models
 from django.utils.text import slugify
 from django.urls import reverse
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from cloudinary.models import CloudinaryField
 from cloudinary import CloudinaryImage
 
 
-
 class Category(models.Model):
     """
-    Represents a category for products.
-
-    Each category has a unique name and a slug for URL-friendly identifiers.
+    Represents a category for products (e.g., Birthday, Wedding, Anniversary).
+    Used for organizing products in the store.
     """
-    name = models.CharField(max_length=200, help_text="The name of the category.")
-    slug = models.SlugField(max_length=200, unique=True, help_text="A URL-friendly identifier for the category.")
+    name = models.CharField(
+        max_length=200, 
+        help_text="The name of the category (e.g., Birthday, Wedding)."
+    )
+    slug = models.SlugField(
+        max_length=200, 
+        unique=True, 
+        help_text="A URL-friendly identifier for the category."
+    )
 
     def save(self, *args, **kwargs):
         """
@@ -31,9 +36,6 @@ class Category(models.Model):
         return reverse('category_detail', args=[self.slug])
 
     class Meta:
-        """
-        Meta options for the Category model.
-        """
         ordering = ['name']
         indexes = [
             models.Index(fields=['name']),
@@ -42,66 +44,118 @@ class Category(models.Model):
         verbose_name_plural = 'categories'
 
     def __str__(self):
-        """
-        Returns the string representation of the category, which is its name.
-        """
         return self.name
 
 
 class Product(models.Model):
     """
-    Represents a product in the store.
-
-    Each product belongs to a category and has various attributes like name,
-    description, price, and stock information.
+    Represents a product in the bakery store.
+    Can be either a Cake (customizable) or Pastry (fixed product).
     """
+    
+    # Product type choices
+    PRODUCT_TYPES = [
+        ('cake', 'Cake'),
+        ('pastry', 'Pastry'),
+    ]
+    
+    # Cake covering choices
+    COVERING_CHOICES = [
+        ('buttercream', 'Buttercream'),
+        ('fondant', 'Fondant'),
+        ('cream_cheese', 'Cream Cheese Frosting'),
+        ('whipped_cream', 'Whipped Cream'),
+        ('naked', 'Naked Cake'),
+        ('ganache', 'Chocolate Ganache'),
+    ]
+    
+    # Basic product information
     category = models.ForeignKey(
         Category,
         related_name='products',
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        help_text="The category this product belongs to."
+        help_text="Optional category for organizing products (e.g., Birthday, Wedding)."
     )
-    name = models.CharField(max_length=200, help_text="The name of the product.")
-    slug = models.SlugField(max_length=200, help_text="A URL-friendly identifier for the product.")
     
-    # updated Image field to use Cloudinary
+    product_type = models.CharField(
+        max_length=20,
+        choices=PRODUCT_TYPES,
+        default='cake',
+        help_text="Cake: customizable, made-to-order. Pastry: fixed product."
+    )
     
+    name = models.CharField(
+        max_length=200, 
+        help_text="The name of the product (e.g., 'Butterfly Cake', 'Chocolate Croissant')."
+    )
+    
+    slug = models.SlugField(
+        max_length=200, 
+        help_text="A URL-friendly identifier for the product."
+    )
+    
+    # Image field using Cloudinary
     image = CloudinaryField(
         'image',
         folder='products_images',
         transformation=[{'quality': 'auto', 'fetch_format': 'auto'}],
         blank=True,
         null=True,
-        help_text="An image of the product."
+        help_text="An image of the product. Recommended size: 800x600px."
     )
-    description = models.TextField(blank=True, null=True, help_text="A detailed description of the product.")
-
-    # Price with validation
+    
+    description = models.TextField(
+        blank=True, 
+        null=True, 
+        help_text="A detailed description of the product."
+    )
     price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         validators=[MinValueValidator(0.01)],
-        help_text="The price of the product."
+        help_text="For cakes: Design base fee. For pastries: Fixed selling price."
     )
-
-    # Stock management
-    stock_quantity = models.PositiveIntegerField(
-        default=0,
-        help_text="The current quantity of the product in stock."
+    
+    # Cake-specific fields (only relevant when product_type='cake')
+    layers = models.PositiveIntegerField(
+        null=True, 
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        help_text="Number of cake layers (e.g., 2, 4). Required for cakes."
     )
-    low_stock_threshold = models.PositiveIntegerField(
-        default=5,
-        help_text="The stock level at which to trigger a low stock alert."
+    
+    covering = models.CharField(
+        max_length=50,
+        choices=COVERING_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Type of cake covering. Required for cakes."
     )
-    track_inventory = models.BooleanField(
+    
+    inspiration = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Design inspiration or story behind the cake (optional)."
+    )
+    
+    preparation_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(30)],
+        help_text="Minimum days needed to prepare this product. Required for cakes."
+    )
+    
+    # Product availability
+    available = models.BooleanField(
         default=True,
-        help_text="Whether to track inventory for this product."
+        help_text="Whether the product is available for purchase. Uncheck to hide from store."
     )
-    available = models.BooleanField(default=True, help_text="Whether the product is available for purchase.")
-    created_at = models.DateTimeField(auto_now_add=True, help_text="The date and time the product was created.")
-    updated_at = models.DateTimeField(auto_now=True, help_text="The date and time the product was last updated.")
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
         """
@@ -111,42 +165,53 @@ class Product(models.Model):
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
 
-    def is_in_stock(self):
+    
+    # ========== UPDATED CLEAN METHOD ==========
+    def clean(self):
         """
-        Checks if the product is in stock.
-
-        If inventory is not tracked, it relies on the 'available' flag.
-        Otherwise, it checks if the stock quantity is greater than zero.
+        Custom validation based on product_type.
         """
-        if not self.track_inventory:
-            return self.available
-        return self.stock_quantity > 0 and self.available
+        from django.core.exceptions import ValidationError
+        
+        # For cakes: validate required fields
+        if self.product_type == 'cake':
+            errors = {}
+            
+            if not self.layers:
+                errors['layers'] = 'Layers is required for cakes.'
+            elif self.layers < 1:
+                errors['layers'] = 'Cake must have at least 1 layer.'
+            
+            if not self.covering:
+                errors['covering'] = 'Covering type is required for cakes.'
+            
+            if not self.preparation_days:
+                errors['preparation_days'] = 'Preparation days is required for cakes.'
+            elif self.preparation_days < 1:
+                errors['preparation_days'] = 'Preparation days must be at least 1.'
+            
+            if errors:
+                raise ValidationError(errors)
+        
+        # For pastries: ensure cake fields are NULL/empty
+        elif self.product_type == 'pastry':
+            # Force these fields to be None (NULL in database)
+            self.layers = None
+            self.covering = None
+            self.inspiration = None
+            self.preparation_days = None
+        
+        super().clean()
 
-    def is_low_stock(self):
-        """
-        Checks if the product's stock is below the low stock threshold.
+    @property
+    def is_cake(self):
+        """Helper property to check if product is a cake."""
+        return self.product_type == 'cake'
 
-        If inventory is not tracked, this will always be False.
-        """
-        if not self.track_inventory:
-            return False
-        return self.stock_quantity <= self.low_stock_threshold
-
-    def reduce_stock(self, quantity):
-        """Reduce stock by given quantity."""
-        if self.track_inventory:
-            if self.stock_quantity >= quantity:
-                self.stock_quantity -= quantity
-                self.save()
-                return True
-            return False
-        return True  # Always succeed if not tracking inventory
-
-    def increase_stock(self, quantity):
-        """Increase stock by given quantity."""
-        if self.track_inventory:
-            self.stock_quantity += quantity
-            self.save()
+    @property
+    def is_pastry(self):
+        """Helper property to check if product is a pastry."""
+        return self.product_type == 'pastry'
 
     def get_absolute_url(self):
         """
@@ -154,66 +219,70 @@ class Product(models.Model):
         """
         return reverse('product_detail', args=[self.id, self.slug])
     
+    # Cloudinary image URL properties
     @property
     def image_url(self):
-        """Get the full cloudinary url for the image"""
+        """Get the full Cloudinary URL for the image."""
         if self.image:
             return self.image.url
         return None
+    
     @property
     def thumbnail_url(self):
-        """Get a thumbnail version from Cloudinary with proper transformation"""
+        """Get a thumbnail version from Cloudinary (150x150)."""
         if self.image:
-            # Using cloudinary's transformation API for thumbnails
             public_id = self.image.public_id
+            # Fixed the typo: changed 'cake' to 'crop'
             thumbnail = CloudinaryImage(public_id).build_url(
                 transformation=[
-                    {'width': 150, 'height': 150, 'cake': 'fill', 'gravity': 'center'},
+                    {'width': 150, 'height': 150, 'crop': 'fill', 'gravity': 'center'},
                     {'quality': 'auto', 'fetch_format': 'auto'}    
                 ]
             )
             return thumbnail
         return None
+    
     @property
     def medium_image_url(self):
-        """Get a medium-size version from cloudinary"""
+        """Get a medium-size version from Cloudinary (400x300)."""
         if self.image:
             public_id = self.image.public_id
+            # Fixed the typo: changed 'cake' to 'fit'
             medium = CloudinaryImage(public_id).build_url(
                 transformation=[
-                    {'width': 400, 'height': 300, 'cake':'fit'},
+                    {'width': 400, 'height': 300, 'crop': 'fit'},
                     {'quality': 'auto', 'fetch_format': 'auto'}
                 ]
             )
             return medium
         return None
+    
     @property
     def large_image_url(self):
-        """Get a large version from cloudinary"""
+        """Get a large version from Cloudinary (800x600)."""
         if self.image:
             public_id = self.image.public_id
+            # Fixed the typo: changed 'cake' to 'fit'
             large = CloudinaryImage(public_id).build_url(
                 transformation=[
-                    {'width': 800, 'height': 600, 'cake': 'fit'},
+                    {'width': 800, 'height': 600, 'crop': 'fit'},
                     {'quality': 'auto', 'fetch_format': 'auto'}
                 ]
-                )
+            )
             return large
         return None
+
     class Meta:
-        """
-        Meta options for the Product model.
-        """
         ordering = ['name']
         indexes = [
             models.Index(fields=['id', 'slug']),
             models.Index(fields=['name']),
             models.Index(fields=['-created_at']),
             models.Index(fields=['available']),
-            models.Index(fields=['stock_quantity']),
+            models.Index(fields=['product_type', 'available']),
             models.Index(fields=['category', 'available']),
         ]
-        # Ensures that each product's slug is unique within its category.
+        # Ensures that each product's slug is unique within its category
         constraints = [
             models.UniqueConstraint(
                 fields=['category', 'slug'],
@@ -222,7 +291,5 @@ class Product(models.Model):
         ]
 
     def __str__(self):
-        """
-        Returns the string representation of the product, which is its name.
-        """
-        return self.name
+        product_type_display = dict(self.PRODUCT_TYPES).get(self.product_type, self.product_type)
+        return f"{self.name} ({product_type_display})"
