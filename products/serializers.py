@@ -80,13 +80,13 @@ class ProductListSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'name', 'slug', 'product_type', 'product_type_display',
-            'image', 'image_url', 'thumbnail_url', 'medium_image_url', 'large_image_url',
+            'image_url', 'thumbnail_url', 'medium_image_url', 'large_image_url',
             'price', 'available', 'category_name', 'created_at',
             # Cake-specific fields (will be null for pastries)
             'layers', 'covering', 'preparation_days'
         ]
         read_only_fields = [
-            'slug', 'created_at', 'image_url', 'thumbnail_url', 
+            'slug', 'created_at', 'image_url', 'thumbnail_url',
             'medium_image_url', 'large_image_url', 'product_type_display'
         ]
 
@@ -113,7 +113,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'name', 'slug', 'product_type', 'product_type_display',
-            'image', 'image_url', 'thumbnail_url', 'medium_image_url', 'large_image_url',
+            'image_url', 'thumbnail_url', 'medium_image_url', 'large_image_url',
             'description', 'price', 'available', 'category', 'created_at', 'updated_at',
             'is_cake', 'is_pastry',
             # Cake-specific fields
@@ -227,34 +227,15 @@ class ProductCakeDetailSerializer(serializers.ModelSerializer):
     
     # Helper properties
     is_cake = serializers.BooleanField(read_only=True)
-    
-    # Customization options will be added from cart app
-    customization_options = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'description', 'price', 'image_url', 
+            'id', 'name', 'description', 'price', 'image_url',
             'medium_image_url', 'large_image_url', 'category_name',
             'layers', 'covering', 'inspiration', 'preparation_days',
-            'is_cake', 'customization_options'
+            'is_cake'
         ]
-
-    def get_customization_options(self, obj):
-        """
-        Get available customization options from cart app.
-        This will be populated when we implement the cart API.
-        """
-        # Only return customization options for cakes
-        if not obj.is_cake:
-            return None
-            
-        # Placeholder - will be implemented when cart API is built
-        return {
-            'sizes': [],  # Will come from CakeSizeMultiplier
-            'flavors': [],  # Will come from CakeFlavorPrice
-            'addons': []  # Will come from CakeCustomizationOption
-        }
 
 
 class ProductSearchSerializer(serializers.ModelSerializer):

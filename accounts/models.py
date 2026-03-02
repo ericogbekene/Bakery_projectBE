@@ -47,15 +47,7 @@ class CustomUser(AbstractUser):
     
     def __str__(self):
         return f"{self.get_full_name()} ({self.email})"
-    
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        if not hasattr(self, 'profile'):
-            from .models import CustomerProfile
-            CustomerProfile.objects.create(user=self)
 
-
-    
     @property
     def full_address(self):
         """Return formatted full address"""
@@ -67,6 +59,7 @@ class CustomUser(AbstractUser):
             self.country
         ]
         return ', '.join([part for part in address_parts if part])
+
 
 class CustomerProfile(models.Model):
     """Extended profile information for customers"""
@@ -107,7 +100,6 @@ class CustomerProfile(models.Model):
         blank=True
     )
     
-    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -141,5 +133,3 @@ class CustomerProfile(models.Model):
             self.save()
             return True
         return False
-
-

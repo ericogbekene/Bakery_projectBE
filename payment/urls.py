@@ -1,10 +1,14 @@
 from django.urls import path
-from .views import InitializePayment, VerifyPayment, RefundTransaction
-from .webhooks import paystack_webhook
+from .views import (
+    InitiatePaymentView,
+    VerifyPaymentView,
+    RefundPaymentView,
+)
+
+app_name = 'payments'
 
 urlpatterns = [
-    path('initialize/', InitializePayment.as_view(), name='initialize_payment'),
-    path('verify/<str:reference>/', VerifyPayment.as_view(), name='verify_payment'),
-    path('refund/<str:reference>/', RefundTransaction.as_view(), name='refund_transaction'),
-    path('webhook/', paystack_webhook, name='paystack_webhook'),
+    path('initialize/', InitiatePaymentView.as_view(), name='payment-initialize'),
+    path('verify/<str:reference>/', VerifyPaymentView.as_view(), name='payment-verify'),
+    path('refund/<str:reference>/', RefundPaymentView.as_view(), name='payment-refund'),
 ]

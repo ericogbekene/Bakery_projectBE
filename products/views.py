@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 from products.models import Product, Category
 from .serializers import (
     ProductListSerializer,
@@ -32,26 +34,8 @@ class IsAdminOrReadOnly(permissions.BasePermission):
     Read-only for everyone else.
     """
     def has_permission(self, request, view):
-        # Allow read-only for everyone
         if request.method in permissions.SAFE_METHODS:
             return True
-        # Write permissions only for admin users
-        return request.user and request.user.is_staff
-
-
-class IsAdminForWrite(permissions.BasePermission):
-    """
-    Custom permission that allows:
-    - Admin users: all operations
-    - Authenticated users: read-only
-    - Anonymous users: read-only
-    """
-    def has_permission(self, request, view):
-        # Allow read-only for all
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        
-        # Write operations require admin
         return request.user and request.user.is_staff
 
 
@@ -200,16 +184,22 @@ class ProductDetailView(generics.RetrieveAPIView):
 class ProductCakeDetailView(APIView):
     """
     GET /api/products/<slug:slug>/customize/
-    
+
     Get cake details with all available customization options.
     Only works for cakes, returns 400 for pastries.
     """
-    permission_classes = [permissions.AllowAny]  # Public access
-    
+    permission_classes = [permissions.AllowAny]
+
+    @swagger_auto_schema(
+        operation_summary="Get Cake Customization Options",
+        operation_description="Get a cake's details along with all available sizes, flavors and add-on options. Returns 400 for pastries.",
+        responses={
+            200: openapi.Response(description="Cake details with customization options."),
+            400: openapi.Response(description="This endpoint is only for cakes."),
+            404: openapi.Response(description="Product not found."),
+        }
+    )
     def get(self, request, slug):
-        """
-        Retrieve cake with customization options.
-        """
         # Get the product
         product = get_object_or_404(
             Product.objects.filter(available=True),
@@ -332,15 +322,19 @@ class ProductSearchView(generics.ListAPIView):
 class ProductCountByTypeView(APIView):
     """
     GET /api/products/counts/
-    
+
     Get counts of products by type.
     """
-    permission_classes = [permissions.AllowAny]  # Public access
-    
+    permission_classes = [permissions.AllowAny]
+
+    @swagger_auto_schema(
+        operation_summary="Get Product Counts",
+        operation_description="Get a count of available cakes, pastries and total products.",
+        responses={
+            200: openapi.Response(description="Product counts by type."),
+        }
+    )
     def get(self, request):
-        """
-        Return counts of cakes and pastries.
-        """
         cake_count = Product.objects.filter(
             product_type='cake', 
             available=True
@@ -365,14 +359,13 @@ class ProductCountByTypeView(APIView):
 class ProductCreateView(generics.CreateAPIView):
     """
     POST /api/products/create/
-    
+
     Create a new product.
     Requires admin authentication.
     """
-    permission_classes = [permissions.IsAdminUser]  # Admin only
+    permission_classes = [permissions.IsAdminUser]
     queryset = Product.objects.all()
     serializer_class = ProductCreateUpdateSerializer
-    pagination_class = LargeResultsSetPagination
     
     def perform_create(self, serializer):
         """
