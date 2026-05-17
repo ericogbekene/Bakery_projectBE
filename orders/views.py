@@ -217,6 +217,45 @@ class TrackOrderView(APIView):
         return Response(data)
 
 
+class TrackOrderByNumberView(APIView):
+    """
+    GET /api/orders/track/?order_number=ORD-20260508-1D973DB8
+    Public — no auth required.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        order_number = request.query_params.get('order_number')
+        if not order_number:
+            return Response(
+                {'error': 'order_number is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order = get_object_or_404(Order, order_number=order_number)
+
+        data = {
+            'order_number': order.order_number,
+            'status': order.status,
+            'status_display': order.get_status_display(),
+            'status_color': order.get_status_display_color(),
+            'created_at': order.created_at,
+            'estimated_ready_date': None,
+            'timeline': []
+        }
+
+        for history in order.history.all().order_by('timestamp')[:10]:
+            data['timeline'].append({
+                'action': history.get_action_display(),
+                'description': history.description,
+                'timestamp': history.timestamp
+            })
+
+        return Response(data)
+    
+
+
+
 # ============================================================================
 # ADMIN ONLY VIEWS
 # ============================================================================

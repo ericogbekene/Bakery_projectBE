@@ -10,6 +10,7 @@ urlpatterns = [
     path('<int:id>/', views.OrderDetailView.as_view(), name='order-detail'),
     path('<int:id>/cancel/', views.CancelOrderView.as_view(), name='order-cancel'),
     path('<int:id>/track/', views.TrackOrderView.as_view(), name='order-track'),
+    path('track/', views.TrackOrderByNumberView.as_view(), name='order-track-by-number'),
 
     # Admin endpoints — stats must come before <int:id> patterns to avoid routing conflict
     path('admin/stats/', views.AdminOrderStatsView.as_view(), name='order-stats'),
