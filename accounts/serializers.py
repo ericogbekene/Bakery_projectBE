@@ -21,6 +21,7 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['loyalty_points', 'membership_tier', 'total_orders', 'total_spent']
 
+
 class CustomUserSerializer(serializers.ModelSerializer):
     profile = CustomerProfileSerializer(read_only=True)
 
@@ -34,14 +35,33 @@ class CustomUserSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['is_verified', 'created_at', 'updated_at']
 
+
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
+    password_confirm = serializers.CharField(write_only=True, min_length=8)
 
     class Meta:
         model = User
-        fields = ['email', 'username', 'first_name', 'last_name', 'password']
+        fields = ['email', 'username', 'first_name', 'last_name', 'password', 'password_confirm']
+
+    def validate(self, attrs):
+        # Reject any unexpected fields
+        allowed_fields = set(self.Meta.fields)
+        extra_fields = set(self.initial_data.keys()) - allowed_fields
+        if extra_fields:
+            raise serializers.ValidationError(
+                {field: "This field is not allowed." for field in extra_fields}
+            )
+
+        # Confirm passwords match
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
+
+        return attrs
 
     def create(self, validated_data):
+        # Remove password_confirm before creating user — it's not a model field
+        validated_data.pop('password_confirm')
         user = User.objects.create_user(
             email=validated_data['email'],
             username=validated_data['username'],

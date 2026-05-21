@@ -137,12 +137,12 @@ class CartSerializer(serializers.ModelSerializer):
     class Meta:
         model = Cart
         fields = [
-            'id', 'user', 'session_key', 'is_active',
-            'items', 'item_count', 'subtotal', 
+            'id',
+            'items', 'item_count', 'subtotal',
             'delivery_cost', 'grand_total',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'user', 'session_key', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class PriceCalculationSerializer(serializers.Serializer):

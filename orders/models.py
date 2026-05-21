@@ -337,6 +337,20 @@ class Order(models.Model):
         }
         return colors.get(self.payment_status, '#ffffff')
     
+    def update_total_cost(self):
+        """
+        Recalculate order total from all order items.
+        Called by signals when OrderItems are added/updated/deleted.
+        """
+        from django.db.models import Sum
+        items_total = self.items.aggregate(
+            total=Sum('item_total')
+        )['total'] or Decimal('0.00')
+    
+        self.subtotal = items_total
+        self.total_amount = self.subtotal + self.delivery_fee
+        self.save(update_fields=['subtotal', 'total_amount'])
+    
     def update_status(self, new_status, user=None, reason=""):
         """
         Update order status and automatically set timestamp.

@@ -433,3 +433,6 @@ JAZZMIN_SETTINGS = {
     # Add a language dropdown into the admin
     "language_chooser": False,
 }
+
+# Frontend URL for email links
+FRONTEND_URL = 'http://localhost:3000'
