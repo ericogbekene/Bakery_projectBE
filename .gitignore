@@ -2,3 +2,5 @@
 *.pyc
 virtualbox/
 db.sqlite3
+myprojectenv/
+staticfiles/
