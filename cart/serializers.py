@@ -27,7 +27,8 @@ class CartItemSerializer(serializers.ModelSerializer):
         write_only=True
     )
     unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    # AFTER
+    total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True, source='total_item_price')
     customization_summary = serializers.CharField(source='get_customization_summary', read_only=True)
     price_breakdown = serializers.SerializerMethodField()
     
