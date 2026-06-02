@@ -36,20 +36,23 @@ class Command(BaseCommand):
             )
             self.stdout.write(f"{'Created' if created else 'Exists'}: Flavor {flavor} (x{mult})")
 
-        # ── Add-ons ────────────────────────────────────────────
-        addons = [
-            ('topper',        Decimal('2500.00'),  'Cake topper'),
-            ('candle',        Decimal('500.00'),   'Candle'),
-            ('birthday_card', Decimal('1000.00'),  'Birthday card'),
-            ('chocolate',     Decimal('5000.00'),  'Chocolate box'),
-            ('wine',          Decimal('15000.00'), 'Wine bottle'),
-            ('whiskey',       Decimal('8000.00'),  'Whiskey 200ml'),
-        ]
-        for ctype, price, desc in addons:
-            obj, created = CakeCustomizationOption.objects.get_or_create(
-                customization_type=ctype,
-                defaults={'price_per_unit': price, 'description': desc}
-            )
-            self.stdout.write(f"{'Created' if created else 'Exists'}: {ctype} (₦{price})")
+        # ── Add-ons ───────────────────────────────────────────
 
-        self.stdout.write(self.style.SUCCESS('\nDone. Cake pricing data seeded successfully.'))
+        addons = [
+        ('topper',        'Cake Topper',    Decimal('2500.00'),  'Cake topper'),
+        ('candle',        'Candle',         Decimal('500.00'),   'Candle'),
+        ('birthday_card', 'Birthday Card',  Decimal('1000.00'),  'Birthday card'),
+        ('chocolate',     'Chocolate Box',  Decimal('5000.00'),  'Chocolate box'),
+        ('wine',          'Wine Bottle',    Decimal('15000.00'), 'Wine bottle'),
+        ('whiskey',       'Whiskey 200ml',  Decimal('8000.00'),  'Whiskey 200ml'),
+    ]
+        for ctype, name, price, desc in addons:
+            obj, created = CakeCustomizationOption.objects.get_or_create(
+                name=name,
+                defaults={
+                    'customization_type': ctype,
+                    'price_per_unit': price,
+                    'description': desc
+                }
+            )
+            self.stdout.write(f"{'Created' if created else 'Exists'}: {name} (₦{price})")

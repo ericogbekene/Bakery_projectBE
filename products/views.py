@@ -194,7 +194,7 @@ class ProductCakeDetailView(APIView):
                 {
                     'id': a.id,
                     'type': a.customization_type,
-                    'name': a.get_customization_type_display(),
+                    'name': a.name,
                     'price': str(a.price_per_unit),
                     'description': a.description
                 } for a in addons

@@ -11,10 +11,6 @@ from django.conf import settings
 # ============================================================================
 
 class CakeCustomizationOption(models.Model):
-    """
-    Store all possible cake customization options with their prices.
-    Examples: cake toppers, candles, chocolate boxes, wine bottles, etc.
-    """
     CUSTOMIZATION_TYPES = [
         ('topper', 'Cake Topper'),
         ('candle', 'Candle'),
@@ -26,8 +22,21 @@ class CakeCustomizationOption(models.Model):
 
     customization_type = models.CharField(
         max_length=50,
-        choices=CUSTOMIZATION_TYPES,
-        unique=True
+        blank=True,
+        help_text="Leave blank for custom addons created by admin"
+    )
+
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Display name e.g. 'Balloon Pack', 'Cake Topper'"
+    )
+
+    slug = models.SlugField(
+        max_length=100,
+        unique=True,
+        blank=True,
+        help_text="Auto-generated unique identifier"
     )
 
     price_per_unit = models.DecimalField(
@@ -51,14 +60,70 @@ class CakeCustomizationOption(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            base_slug = slugify(self.name)
+            slug = base_slug
+            counter = 1
+            while CakeCustomizationOption.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
     class Meta:
-        ordering = ['customization_type']
+        ordering = ['name']
         verbose_name = 'Cake Customization Option'
         verbose_name_plural = 'Cake Customization Options'
 
     def __str__(self):
-        return f"{self.get_customization_type_display()} - ₦{self.price_per_unit}"
+        return f"{self.name} - ₦{self.price_per_unit}"
+    
+# ============================================================================
 
+class CartItemAddon(models.Model):
+    """
+    Dynamic addons selected for a cart item.
+    Links a CartItem to a CakeCustomizationOption with a quantity.
+    Used for admin-created addons beyond the legacy hardcoded fields.
+    """
+    cart_item = models.ForeignKey(
+        'CartItem',
+        on_delete=models.CASCADE,
+        related_name='dynamic_addons'
+    )
+
+    addon = models.ForeignKey(
+        CakeCustomizationOption,
+        on_delete=models.PROTECT,
+        help_text="The selected customization option"
+    )
+
+    quantity = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)]
+    )
+
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['added_at']
+        unique_together = ['cart_item', 'addon']
+        verbose_name = 'Cart Item Addon'
+        verbose_name_plural = 'Cart Item Addons'
+
+    def __str__(self):
+        return f"{self.quantity}x {self.addon.name} for CartItem {self.cart_item_id}"
+
+    @property
+    def total_cost(self):
+        return self.addon.price_per_unit * self.quantity
+
+
+
+
+# CART MODELS
 
 class CakeSizeMultiplier(models.Model):
     """
@@ -368,9 +433,12 @@ class CartItem(models.Model):
         return sum(multipliers, Decimal('0.00')) / len(multipliers)
 
     def calculate_addons_cost(self):
-        """Calculate the total cost of all add-ons for ONE cake."""
+        """Calculate the total cost of all add-ons for ONE cake.
+        Includes both legacy hardcoded fields and dynamic addons.
+        """
         total_addons = Decimal('0.00')
 
+        # ── Legacy hardcoded addons ────────────────────────────────
         addon_prices = {}
         try:
             addon_options = CakeCustomizationOption.objects.filter(is_active=True)
@@ -386,13 +454,25 @@ class CartItem(models.Model):
             ('wine', 'wine'),
             ('whiskey_200ml', 'whiskey'),
         ]
-
+        
         for field_name, option_type in addon_mapping:
             quantity = getattr(self, field_name, 0)
             if quantity > 0 and option_type in addon_prices:
                 total_addons += addon_prices[option_type] * quantity
 
+        # ── Dynamic addons ─────────────────────────────────────────
+        # Only available after the item has been saved (has a pk)
+        if self.pk:
+            try:
+                for dynamic in self.dynamic_addons.select_related('addon').filter(
+                    addon__is_active=True
+                ):
+                    total_addons += dynamic.addon.price_per_unit * dynamic.quantity
+            except Exception:
+                pass
+
         return total_addons
+
 
     def calculate_total_price(self):
         """
@@ -465,22 +545,17 @@ class CartItem(models.Model):
     # SAVE METHOD
     # ========================================================================
 
+    # FIXED
     def save(self, *args, **kwargs):
-        """
-        Override save to:
-        1. Ensure base_price is set
-        2. Calculate and store add-ons cost
-        3. Validate cake requirements (skip during initial creation)
-        """
         if self.base_price is None and self.product:
             self.base_price = self.product.price
 
         self.customization_cost = self.calculate_addons_cost()
 
-        if self.pk is not None:
-            self.full_clean()
+        self.full_clean()   # always validate, including on first save
 
         super().save(*args, **kwargs)
+
 
     # ========================================================================
     # VALIDATION
