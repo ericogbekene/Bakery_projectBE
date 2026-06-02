@@ -12,13 +12,26 @@ class Category(models.Model):
     Used for organizing products in the store.
     """
     name = models.CharField(
-        max_length=200, 
+        max_length=200,
         help_text="The name of the category (e.g., Birthday, Wedding)."
     )
     slug = models.SlugField(
-        max_length=200, 
-        unique=True, 
+        max_length=200,
+        unique=True,
         help_text="A URL-friendly identifier for the category."
+    )
+    image = CloudinaryField(
+        'image',
+        folder='category_images',
+        transformation=[{'quality': 'auto', 'fetch_format': 'auto'}],
+        blank=True,
+        null=True,
+        help_text="Category image. Recommended size: 800x600px."
+    )
+    description = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Short description of this category."
     )
 
     def save(self, *args, **kwargs):
@@ -34,6 +47,13 @@ class Category(models.Model):
         Returns the absolute URL for a category instance.
         """
         return reverse('category_detail', args=[self.slug])
+
+    @property
+    def image_url(self):
+        """Get the full Cloudinary URL for the image."""
+        if self.image:
+            return self.image.url
+        return None
 
     class Meta:
         ordering = ['name']
