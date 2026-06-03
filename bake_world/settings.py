@@ -347,9 +347,9 @@ JAZZMIN_SETTINGS = {
     # UI
     "related_modal_active": False,
     "custom_css": None,
-    "custom_js": None,
     "use_google_fonts_cdn": True,
     "show_ui_builder": False,
+    "custom_js": "staticfiles/jazzmin/js/jazzmin_tabs_fix.js",
 
     # Change view
     "changeform_format": "horizontal_tabs",
