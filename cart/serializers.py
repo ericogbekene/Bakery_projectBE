@@ -2,6 +2,26 @@ from rest_framework import serializers
 from cart.models import Cart, CartItem, DeliveryInfo
 from products.models import Product
 from decimal import Decimal
+from cart.models import Cart, CartItem, DeliveryInfo, CartItemAddon, CakeCustomizationOption
+
+
+
+
+class CartItemAddonSerializer(serializers.ModelSerializer):
+    addon_name = serializers.CharField(source='addon.name', read_only=True)
+    addon_slug = serializers.CharField(source='addon.slug', read_only=True)
+    unit_price = serializers.DecimalField(
+        source='addon.price_per_unit',
+        max_digits=10, decimal_places=2, read_only=True
+    )
+    total_cost = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
+    )
+
+    class Meta:
+        model = CartItemAddon
+        fields = ['id', 'addon', 'addon_name', 'addon_slug', 
+                  'quantity', 'unit_price', 'total_cost']
 
 
 class CartItemProductSerializer(serializers.ModelSerializer):
@@ -17,35 +37,38 @@ class CartItemProductSerializer(serializers.ModelSerializer):
 
 
 class CartItemSerializer(serializers.ModelSerializer):
-    """
-    Serializer for individual cart items.
-    """
     product = CartItemProductSerializer(read_only=True)
-    product_id = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.all(),
-        source='product',
-        write_only=True
+    unit_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
     )
-    unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    customization_summary = serializers.CharField(source='get_customization_summary', read_only=True)
+    total_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True,
+        source='total_item_price'
+    )
+    customization_summary = serializers.CharField(
+        source='get_customization_summary', read_only=True
+    )
     price_breakdown = serializers.SerializerMethodField()
-    
+    dynamic_addons = CartItemAddonSerializer(many=True, read_only=True)
+
     class Meta:
         model = CartItem
         fields = [
-            'id', 'product', 'product_id', 'quantity',
+            'id', 'product', 'quantity',
             'flavour_1', 'flavour_2', 'size', 'colours',
-            'cake_topper', 'candle', 'birthday_card', 
+            'cake_topper', 'candle', 'birthday_card',
             'chocolate', 'wine', 'whiskey_200ml',
             'additional_notes',
             'base_price', 'customization_cost',
             'unit_price', 'total_price',
+            'dynamic_addons',
             'customization_summary', 'price_breakdown',
             'added_at'
         ]
-        read_only_fields = ['id', 'base_price', 'customization_cost', 
-                           'unit_price', 'total_price', 'added_at']
+        read_only_fields = [
+            'id', 'base_price', 'customization_cost',
+            'unit_price', 'total_price', 'added_at'
+        ]
     
     def get_price_breakdown(self, obj):
         """
@@ -62,53 +85,66 @@ class CartItemSerializer(serializers.ModelSerializer):
         }
 
 
+class AddonInputSerializer(serializers.Serializer):
+    addon_id = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=1, default=1)
+
+
 class AddToCartSerializer(serializers.Serializer):
-    """
-    Serializer for adding items to cart.
-    """
     product_id = serializers.IntegerField()
     quantity = serializers.IntegerField(min_value=1, default=1)
-    
+
     # Cake customization fields
     flavour_1 = serializers.CharField(required=False, allow_blank=True, default='')
     flavour_2 = serializers.CharField(required=False, allow_blank=True, default='')
     size = serializers.CharField(required=False, allow_blank=True, default='')
     colours = serializers.CharField(required=False, allow_blank=True, default='')
-    
-    # Add-ons
+
+    # Legacy add-ons
     cake_topper = serializers.IntegerField(min_value=0, default=0)
     candle = serializers.IntegerField(min_value=0, default=0)
     birthday_card = serializers.IntegerField(min_value=0, default=0)
     chocolate = serializers.IntegerField(min_value=0, default=0)
     wine = serializers.IntegerField(min_value=0, default=0)
     whiskey_200ml = serializers.IntegerField(min_value=0, default=0)
-    
-    additional_notes = serializers.CharField(required=False, allow_blank=True, default='')
-    
+
+    # Dynamic addons
+    addons = AddonInputSerializer(many=True, required=False, default=list)
+
+    additional_notes = serializers.CharField(
+        required=False, allow_blank=True, default=''
+    )
+
     def validate(self, data):
-        """
-        Validate the product exists and is available.
-        """
         try:
             product = Product.objects.get(id=data['product_id'], available=True)
         except Product.DoesNotExist:
             raise serializers.ValidationError({
                 'product_id': 'Product not found or not available.'
             })
-        
-        # Validate cake requirements
+
         if product.is_cake:
             if not data.get('size'):
                 raise serializers.ValidationError({
                     'size': 'Size is required for cakes.'
                 })
-            
             if not data.get('flavour_1'):
                 raise serializers.ValidationError({
                     'flavour_1': 'At least one flavor is required for cakes.'
                 })
-        
-        # Store product in context for the view
+
+        # Validate dynamic addon IDs exist and are active
+        addon_ids = [a['addon_id'] for a in data.get('addons', [])]
+        if addon_ids:
+            found = CakeCustomizationOption.objects.filter(
+                id__in=addon_ids, is_active=True
+            ).values_list('id', flat=True)
+            missing = set(addon_ids) - set(found)
+            if missing:
+                raise serializers.ValidationError({
+                    'addons': f'Invalid or inactive addon IDs: {list(missing)}'
+                })
+
         self.context['product'] = product
         return data
 

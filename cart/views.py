@@ -19,6 +19,7 @@ from .serializers import (
     UpdateCartItemSerializer, PriceCalculationSerializer,
     DeliveryInfoSerializer, GuestCartMergeSerializer
 )
+from cart.models import CartItemAddon, CakeCustomizationOption
 from delivery.models import DeliveryService
 
 
@@ -103,9 +104,28 @@ class AddToCartView(APIView):
         ).first()
 
         if existing_item:
-            # Update quantity of existing item
             existing_item.quantity += data.get('quantity', 1)
             existing_item.save()
+
+            # Update dynamic addons if provided
+            
+            for addon_input in data.get('addons', []):
+                try:
+                    addon = CakeCustomizationOption.objects.get(
+                        id=addon_input['addon_id'],
+                        is_active=True
+                    )
+                    addon_obj, created = CartItemAddon.objects.get_or_create(
+                        cart_item=existing_item,
+                        addon=addon,
+                        defaults={'quantity': addon_input['quantity']}
+                    )
+                    if not created:
+                        addon_obj.quantity += addon_input['quantity']
+                        addon_obj.save()
+                except CakeCustomizationOption.DoesNotExist:
+                    pass
+                
             return Response({
                 'message': f"Updated quantity of {product.name} in cart.",
                 'cart_item': CartItemSerializer(existing_item).data,
@@ -131,6 +151,25 @@ class AddToCartView(APIView):
                 additional_notes=data.get('additional_notes', ''),
                 base_price=product.price
             )
+            cart_item.save()
+
+            # Save dynamic addons
+            
+            for addon_input in data.get('addons', []):
+                try:
+                    addon = CakeCustomizationOption.objects.get(
+                        id=addon_input['addon_id'],
+                        is_active=True
+                    )
+                    CartItemAddon.objects.create(
+                        cart_item=cart_item,
+                        addon=addon,
+                        quantity=addon_input['quantity']
+                    )
+                except CakeCustomizationOption.DoesNotExist:
+                    pass
+
+            # Recalculate customization_cost now that dynamic addons are saved
             cart_item.customization_cost = cart_item.calculate_addons_cost()
             cart_item.save()
 
@@ -139,8 +178,8 @@ class AddToCartView(APIView):
                 'cart_item': CartItemSerializer(cart_item).data,
                 'cart_item_count': get_cart_item_count(request)
             }, status=status.HTTP_201_CREATED)
-
-
+        
+        
 class CartItemDetailView(APIView):
     """
     PATCH /api/cart/items/<id>/ - Update cart item quantity

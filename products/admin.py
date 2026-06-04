@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django import forms
 from .models import Category, Product
+from django.utils.html import format_html
 
 
 class ProductAdminForm(forms.ModelForm):
@@ -22,9 +23,30 @@ class ProductAdminForm(forms.ModelForm):
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ['name', 'slug']
-    prepopulated_fields = {'slug': ('name',)}
+    list_display = ['name', 'product_count', 'image_preview']
     search_fields = ['name']
+    readonly_fields = ['slug', 'image_preview']
+
+    fieldsets = [
+        ('Basic Information', {
+            'fields': ['name', 'slug', 'description']
+        }),
+        ('Image', {
+            'fields': ['image', 'image_preview']
+        }),
+    ]
+
+   
+
+    def image_preview(self, obj):
+        if obj.image_url:
+            return format_html('<img src="{}" height="50" />', obj.image_url)
+        return 'No image'
+    image_preview.short_description = 'Preview'
+
+    def product_count(self, obj):
+        return obj.products.filter(available=True).count()
+    product_count.short_description = 'Products'
 
 
 @admin.register(Product)

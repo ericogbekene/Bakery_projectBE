@@ -4,61 +4,49 @@ from products.models import Category, Product
 
 
 class CategoryListSerializer(serializers.ModelSerializer):
-    """
-    Serializes a Category for list views, providing a count of available products.
-    """
     product_count = serializers.SerializerMethodField()
+    image_url = serializers.ReadOnlyField()
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'slug', 'product_count']
+        fields = ['id', 'name', 'slug', 'description', 'image_url', 'product_count']
         read_only_fields = ['slug']
 
     def get_product_count(self, obj):
-        """Returns the number of available products in the category."""
         return obj.products.filter(available=True).count()
 
 
 class CategoryDetailSerializer(serializers.ModelSerializer):
-    """
-    Serializes a single Category for detail views, including a list of its products.
-    """
     products = serializers.SerializerMethodField()
     product_count = serializers.SerializerMethodField()
+    image_url = serializers.ReadOnlyField()
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'slug', 'product_count', 'products']
+        fields = ['id', 'name', 'slug', 'description', 'image_url', 'product_count', 'products']
         read_only_fields = ['slug']
 
     def get_products(self, obj):
-        """Returns a limited list of available products in the category."""
         products = obj.products.filter(available=True)[:10]
         return ProductListSerializer(products, many=True, context=self.context).data
 
     def get_product_count(self, obj):
-        """Returns the total number of available products in the category."""
         return obj.products.filter(available=True).count()
 
 
 class CategoryCreateUpdateSerializer(serializers.ModelSerializer):
-    """
-    Serializes a Category for create and update operations.
-    """
     class Meta:
         model = Category
-        fields = ['name', 'slug']
+        fields = ['name', 'slug', 'description', 'image']
 
     def create(self, validated_data):
-        """The slug is auto-generated in the model's save method.""" 
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        """Regenerates the slug if the category name changes."""
         if 'name' in validated_data and validated_data['name'] != instance.name:
             instance.slug = slugify(validated_data['name'])
         return super().update(instance, validated_data)
-
+    
 
 class ProductListSerializer(serializers.ModelSerializer):
     """

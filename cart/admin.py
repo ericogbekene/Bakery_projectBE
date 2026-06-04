@@ -3,28 +3,29 @@ from django.contrib import admin
 from django import forms
 from .models import (
     CakeCustomizationOption, CakeSizeMultiplier, 
-    CakeFlavorPrice, Cart, CartItem, DeliveryInfo
+    CakeFlavorPrice, Cart, CartItem, DeliveryInfo,CartItemAddon
 )
 from decimal import Decimal
 
 
+
 @admin.register(CakeCustomizationOption)
 class CakeCustomizationOptionAdmin(admin.ModelAdmin):
-    list_display = ['customization_type', 'price_per_unit', 'is_active', 'description']
+    list_display = ['name', 'customization_type', 'price_per_unit', 'is_active', 'description']
     list_editable = ['price_per_unit', 'is_active']
     list_filter = ['is_active', 'customization_type']
-    search_fields = ['customization_type', 'description']
-    ordering = ['customization_type']
-    
+    search_fields = ['name', 'customization_type', 'description']
+    ordering = ['name']
+    readonly_fields = ['slug']   # slug is auto-generated, never editable
+
     fieldsets = [
         ('Customization Type', {
-            'fields': ['customization_type', 'description']
+            'fields': ['customization_type', 'name', 'slug', 'description']
         }),
         ('Pricing', {
             'fields': ['price_per_unit', 'is_active']
         }),
     ]
-
 
 @admin.register(CakeSizeMultiplier)
 class CakeSizeMultiplierAdmin(admin.ModelAdmin):
@@ -101,6 +102,18 @@ class CartAdmin(admin.ModelAdmin):
     grand_total.short_description = 'Grand Total'
 
 
+
+class CartItemAddonInline(admin.TabularInline):
+    model = CartItemAddon
+    extra = 0
+    fields = ['addon', 'quantity', 'total_cost']
+    readonly_fields = ['total_cost']
+
+    def total_cost(self, obj):
+        return f"₦{obj.total_cost:,.2f}"
+    total_cost.short_description = 'Total Cost'
+
+
 @admin.register(CartItem)
 class CartItemAdmin(admin.ModelAdmin):
     list_display = ['id', 'product', 'quantity', 'size', 'flavour_1', 
@@ -109,6 +122,7 @@ class CartItemAdmin(admin.ModelAdmin):
     search_fields = ['product__name', 'additional_notes']
     readonly_fields = ['unit_price', 'total_item_price', 'added_at', 
                       'size_multiplier_value', 'flavor_multiplier_value']
+    inlines = [CartItemAddonInline]
     
     fieldsets = [
         ('Product', {
@@ -147,6 +161,17 @@ class CartItemAdmin(admin.ModelAdmin):
     def flavor_multiplier_value(self, obj):
         return obj.flavor_multiplier_value
     flavor_multiplier_value.short_description = 'Flavor Multiplier'
+
+@admin.register(CartItemAddon)
+class CartItemAddonAdmin(admin.ModelAdmin):
+    list_display = ['id', 'cart_item', 'addon', 'quantity', 'total_cost', 'added_at']
+    list_filter = ['addon', 'added_at']
+    search_fields = ['cart_item__product__name', 'addon__name']
+    readonly_fields = ['total_cost', 'added_at']
+
+    def total_cost(self, obj):
+        return f"₦{obj.total_cost:,.2f}"
+    total_cost.short_description = 'Total Cost'
 
 
 @admin.register(DeliveryInfo)
