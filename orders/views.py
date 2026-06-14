@@ -252,8 +252,6 @@ class TrackOrderByNumberView(APIView):
             })
 
         return Response(data)
-    
-
 
 
 # ============================================================================
@@ -335,59 +333,7 @@ class AdminPaymentUpdateView(APIView):
         old_status = order.payment_status
         order.payment_status = data['payment_status']
 
-        if data.get('transaction_id'):
-            order.flutterwave_transaction_id = data['transaction_id']
-
-        if data.get('flutterwave_reference'):
-            order.flutterwave_reference = data['flutterwave_reference']
-
-        if data['payment_status'] == 'paid' and not order.payment_date:
-            order.payment_date = now()
-
-        order.save()
-
-        OrderHistory.objects.create(
-            order=order,
-            action='payment_received' if data['payment_status'] == 'paid' else 'status_changed',
-            description=f"Payment status changed from {old_status} to {data['payment_status']}",
-            changed_by=request.user,
-            old_value=old_status,
-            new_value=data['payment_status']
-        )
-
-        return Response({
-            'message': f'Payment status updated to {order.get_payment_status_display()}.',
-            'order': OrderDetailSerializer(order).data
-        })
-
-
-
-class AdminPaymentUpdateView(APIView):
-    permission_classes = [permissions.IsAdminUser]
-
-    @swagger_auto_schema(
-        operation_summary="Update Payment Status (Admin)",
-        operation_description="Update the payment status of an order. Admin only.",
-        request_body=OrderPaymentUpdateSerializer,
-        responses={
-            200: openapi.Response(description="Payment status updated."),
-            400: openapi.Response(description="Validation error."),
-            401: openapi.Response(description="Authentication required."),
-            403: openapi.Response(description="Admin access required."),
-        }
-    )
-    def put(self, request, id):
-        order = get_object_or_404(Order, id=id)
-
-        serializer = OrderPaymentUpdateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        data = serializer.validated_data
-
-        old_status = order.payment_status
-        order.payment_status = data['payment_status']
-
-        # Update Paystack fields instead of Flutterwave
+        # Update Paystack fields
         if data.get('transaction_id'):
             order.paystack_transaction_id = data['transaction_id']
 
@@ -412,3 +358,38 @@ class AdminPaymentUpdateView(APIView):
             'message': f'Payment status updated to {order.get_payment_status_display()}.',
             'order': OrderDetailSerializer(order).data
         })
+
+
+class AdminOrderStatsView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    @swagger_auto_schema(
+        operation_summary="Order Statistics (Admin)",
+        operation_description="Get a breakdown of order and revenue statistics. Admin only.",
+        responses={
+            200: openapi.Response(description="Order statistics."),
+            401: openapi.Response(description="Authentication required."),
+            403: openapi.Response(description="Admin access required."),
+        }
+    )
+    def get(self, request):
+        from django.db.models import Count, Sum
+        from datetime import timedelta
+
+        today = now().date()
+        week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
+
+        stats = {
+            'total_orders': Order.objects.count(),
+            'total_revenue': Order.objects.aggregate(total=Sum('total_amount'))['total'] or 0,
+            'orders_today': Order.objects.filter(created_at__date=today).count(),
+            'revenue_today': Order.objects.filter(created_at__date=today).aggregate(
+                total=Sum('total_amount'))['total'] or 0,
+            'orders_this_week': Order.objects.filter(created_at__date__gte=week_ago).count(),
+            'orders_this_month': Order.objects.filter(created_at__date__gte=month_ago).count(),
+            'status_breakdown': Order.objects.values('status').annotate(count=Count('id')),
+            'payment_status_breakdown': Order.objects.values('payment_status').annotate(count=Count('id')),
+        }
+
+        return Response(stats)
