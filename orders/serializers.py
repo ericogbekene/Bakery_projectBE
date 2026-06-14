@@ -41,7 +41,6 @@ class OrderItemSerializer(serializers.ModelSerializer):
             'customization_summary', 'addons_summary',
             'created_at'
         ]
-        # Fixed: explicit tuple instead of referencing fields variable directly
         read_only_fields = [
             'id', 'product', 'quantity',
             'flavour_1', 'flavour_2', 'size', 'colours',
@@ -154,7 +153,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
 
-    # Payment method is always Flutterwave
+    # Payment method is always Paystack
     payment_method_display = serializers.SerializerMethodField()
 
     # Related objects
@@ -176,8 +175,8 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'status', 'status_display',
             'payment_status', 'payment_status_display',
             'payment_method_display',
-            'flutterwave_transaction_id',
-            'flutterwave_reference',
+            'paystack_transaction_id',
+            'paystack_reference',
             'payment_date',
             'items', 'delivery', 'history', 'payments',
             'created_at', 'confirmed_at', 'processing_at',
@@ -192,8 +191,8 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'status', 'status_display',
             'payment_status', 'payment_status_display',
             'payment_method_display',
-            'flutterwave_transaction_id',
-            'flutterwave_reference',
+            'paystack_transaction_id',
+            'paystack_reference',
             'payment_date',
             'items', 'delivery', 'history', 'payments',
             'created_at', 'confirmed_at', 'processing_at',
@@ -202,8 +201,8 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_payment_method_display(self, obj):
-        """Always return Flutterwave as the payment method."""
-        return "Flutterwave"
+        """Always return Paystack as the payment method."""
+        return "Paystack"
 
     def get_customer_type(self, obj):
         """Determine if customer is registered or guest."""
@@ -215,7 +214,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 class CreateOrderSerializer(serializers.Serializer):
     """
     Serializer for creating an order from cart.
-    Payment method is fixed as Flutterwave.
+    Payment method is fixed as Paystack.
     """
     # Customer information
     customer_name = serializers.CharField(max_length=100)
@@ -231,8 +230,8 @@ class CreateOrderSerializer(serializers.Serializer):
     delivery_time_slot = serializers.CharField(required=False, allow_blank=True)
     special_instructions = serializers.CharField(required=False, allow_blank=True)
 
-    # Flutterwave reference (optional - can be generated on the backend)
-    flutterwave_reference = serializers.CharField(required=False, allow_blank=True)
+    # Paystack reference (optional - can be generated on the backend)
+    paystack_reference = serializers.CharField(required=False, allow_blank=True)
 
     def validate_delivery_date(self, value):
         """Ensure delivery date is not in the past."""
@@ -281,5 +280,5 @@ class OrderPaymentUpdateSerializer(serializers.Serializer):
     """
     payment_status = serializers.ChoiceField(choices=PAYMENT_STATUS_CHOICES)
     transaction_id = serializers.CharField(required=False, allow_blank=True)
-    flutterwave_reference = serializers.CharField(required=False, allow_blank=True)
+    paystack_reference = serializers.CharField(required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
