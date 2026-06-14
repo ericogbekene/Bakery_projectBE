@@ -41,14 +41,14 @@ PAYMENT_METHOD_CHOICES = [
 
 
 # ============================================================================
-# ORDER MODEL (SIMPLIFIED)
+# ORDER MODEL (UPDATED FOR PAYSTACK)
 # ============================================================================
 
 class Order(models.Model):
     """
     Main Order model that stores customer orders.
     Links to Cart and tracks order status and payment.
-    Payment method is Flutterwave only.
+    Payment method is Paystack only.
     """
     
     # Order Identification
@@ -138,7 +138,7 @@ class Order(models.Model):
         help_text="Current order status"
     )
     
-    # Payment Information - Simplified for Flutterwave
+    # Payment Information - Updated for Paystack
     payment_status = models.CharField(
         max_length=20,
         choices=PAYMENT_STATUS_CHOICES,
@@ -147,34 +147,33 @@ class Order(models.Model):
         help_text="Payment status"
     )
     
-    # Payment method is always Flutterwave - we can keep this for reference
-    # but make it non-editable with a default
+    # Payment method is always Paystack
     payment_method = models.CharField(
         max_length=20,
-        default='flutterwave',
-        editable=False,  # Make it non-editable since it's always Flutterwave
-        help_text="Payment method (always Flutterwave)"
+        default='paystack',
+        editable=False,
+        help_text="Payment method (always Paystack)"
     )
     
-    # Flutterwave specific fields
-    flutterwave_transaction_id = models.CharField(
+    # Paystack specific fields
+    paystack_transaction_id = models.CharField(
         max_length=100,
         blank=True,
         db_index=True,
-        help_text="Flutterwave transaction ID"
+        help_text="Paystack transaction ID"
     )
     
-    flutterwave_reference = models.CharField(
+    paystack_reference = models.CharField(
         max_length=100,
         blank=True,
         db_index=True,
-        help_text="Flutterwave payment reference"
+        help_text="Paystack payment reference"
     )
     
-    flutterwave_response = models.JSONField(
+    paystack_response = models.JSONField(
         null=True,
         blank=True,
-        help_text="Full Flutterwave response for reference"
+        help_text="Full Paystack response for reference"
     )
     
     payment_date = models.DateTimeField(
@@ -244,8 +243,8 @@ class Order(models.Model):
             models.Index(fields=['user', '-created_at']),
             models.Index(fields=['status']),
             models.Index(fields=['payment_status']),
-            models.Index(fields=['flutterwave_transaction_id']),
-            models.Index(fields=['flutterwave_reference']),
+            models.Index(fields=['paystack_transaction_id']),
+            models.Index(fields=['paystack_reference']),
             models.Index(fields=['created_at']),
         ]
     
@@ -260,8 +259,8 @@ class Order(models.Model):
             short_uuid = str(uuid.uuid4())[:8].upper()
             self.order_number = f"ORD-{date_str}-{short_uuid}"
         
-        # Ensure payment_method is always flutterwave
-        self.payment_method = 'flutterwave'
+        # Ensure payment_method is always paystack
+        self.payment_method = 'paystack'
         
         super().save(*args, **kwargs)
     
@@ -294,20 +293,24 @@ class Order(models.Model):
         return self.payment_status == 'paid'
     
     @property
-    def flutterwave_payload(self):
+    def paystack_payload(self):
         """
-        Generate Flutterwave payment payload for this order.
-        Useful when redirecting to Flutterwave payment page.
+        Generate Paystack payment payload for this order.
+        Useful when redirecting to Paystack payment page.
         """
         return {
-            'tx_ref': self.flutterwave_reference or self.order_number,
-            'amount': str(self.total_amount),
+            'reference': self.paystack_reference or self.order_number,
+            'amount': int(self.total_amount * 100),  # Convert to kobo/cents
             'currency': 'NGN',
-            'redirect_url': '/payment/callback/',  # Configure this
+            'callback_url': '/payment/callback/',  # Configure this
             'customer': {
                 'email': self.customer_email,
                 'name': self.customer_name,
-                'phone_number': self.customer_phone,
+                'phone': self.customer_phone,
+            },
+            'metadata': {
+                'order_number': self.order_number,
+                'order_id': self.id,
             },
             'customizations': {
                 'title': 'M&C Bakery Order',
@@ -386,19 +389,19 @@ class Order(models.Model):
     
     def update_payment(self, payment_status, transaction_id=None, reference=None, response_data=None):
         """
-        Update payment information after Flutterwave callback.
+        Update payment information after Paystack callback.
         """
         old_status = self.payment_status
         self.payment_status = payment_status
         
         if transaction_id:
-            self.flutterwave_transaction_id = transaction_id
+            self.paystack_transaction_id = transaction_id
         
         if reference:
-            self.flutterwave_reference = reference
+            self.paystack_reference = reference
         
         if response_data:
-            self.flutterwave_response = response_data
+            self.paystack_response = response_data
         
         if payment_status == 'paid' and not self.payment_date:
             self.payment_date = now()
@@ -413,6 +416,7 @@ class Order(models.Model):
             old_value=old_status,
             new_value=payment_status
         )
+
 
 # ============================================================================
 # ORDER DELIVERY MODEL (SEPARATE, MATCHES CART PATTERN)
@@ -908,7 +912,7 @@ def create_order_from_cart(cart, customer_data, delivery_data, payment_method=''
             subtotal=cart.subtotal,
             delivery_fee=delivery_data.get('delivery_fee', Decimal('0.00')),
             total_amount=cart.subtotal + delivery_data.get('delivery_fee', Decimal('0.00')),
-            payment_method=payment_method,
+            payment_method=payment_method or 'paystack',
             status='pending',
             payment_status='pending'
         )

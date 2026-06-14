@@ -15,7 +15,8 @@ class TransactionSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'reference',
-            'flutterwave_transaction_id',
+            'paystack_transaction_id',
+            'paystack_access_code',
             'order',
             'email',
             'amount',
@@ -29,19 +30,19 @@ class TransactionSerializer(serializers.ModelSerializer):
             'id',
             'status',
             'status_display',
-            'flutterwave_transaction_id',
+            'paystack_transaction_id',
+            'paystack_access_code',
             'created_at',
             'modified_at',
         ]
 
-    # Fixed: properly indented outside Meta
     def get_status_display(self, obj):
         return obj.get_status_display()
 
 
 class InitiatePaymentSerializer(serializers.Serializer):
     """
-    Serializer for initiating a payment.
+    Serializer for initiating a Paystack payment.
     Validates the order number before creating a transaction.
     """
     order_number = serializers.CharField(max_length=50)
@@ -49,16 +50,16 @@ class InitiatePaymentSerializer(serializers.Serializer):
 
 class VerifyPaymentSerializer(serializers.Serializer):
     """
-    Serializer for verifying a payment after redirect.
+    Serializer for verifying a Paystack payment after redirect.
+    Paystack returns 'reference' and 'trxref' as query parameters.
     """
-    transaction_id = serializers.CharField()
-    tx_ref = serializers.CharField()
-    status = serializers.CharField()
+    reference = serializers.CharField()
+    trxref = serializers.CharField(required=False)
 
 
 class RefundPaymentSerializer(serializers.Serializer):
     """
-    Serializer for initiating a refund.
+    Serializer for initiating a refund via Paystack.
     """
     reason = serializers.CharField(
         max_length=500,
