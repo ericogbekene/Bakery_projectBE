@@ -292,12 +292,12 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
 
-# ---------------------------------------------------------------------------
+
 # Paystack
 # ---------------------------------------------------------------------------
 PAYSTACK_SECRET_KEY = config("PAYSTACK_SECRET_KEY", default="")
 PAYSTACK_PUBLIC_KEY = config("PAYSTACK_PUBLIC_KEY", default="")
-
+PAYSTACK_CALLBACK_URL = config("PAYSTACK_CALLBACK_URL", default=f"{FRONTEND_URL}/payment/verify")
 # ---------------------------------------------------------------------------
 # Jazzmin
 # ---------------------------------------------------------------------------
