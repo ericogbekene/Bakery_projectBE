@@ -20,7 +20,86 @@ from .serializers import (
 
 
 # ============================================================================
-# EMAIL HELPERS (replaces tasks.py)
+# PAYSTACK SERVICE
+# ============================================================================
+
+class PaystackService:
+    """Service class for Paystack API integration"""
+    
+    BASE_URL = "https://api.paystack.co"
+    
+    @classmethod
+    def initialize_payment(cls, email, amount, reference, metadata=None):
+        """Initialize payment with Paystack"""
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "email": email,
+            "amount": int(amount * 100),  # Convert to kobo/cents
+            "reference": reference,
+            "callback_url": f"{settings.FRONTEND_URL}/payment/verify",
+            "metadata": metadata or {}
+        }
+        
+        try:
+            response = requests.post(
+                f"{cls.BASE_URL}/transaction/initialize",
+                json=payload,
+                headers=headers,
+                timeout=30
+            )
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {"status": False, "message": str(e)}
+    
+    @classmethod
+    def verify_payment(cls, reference):
+        """Verify payment with Paystack"""
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"
+        }
+        
+        try:
+            response = requests.get(
+                f"{cls.BASE_URL}/transaction/verify/{reference}",
+                headers=headers,
+                timeout=30
+            )
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {"status": False, "message": str(e)}
+    
+    @classmethod
+    def refund_payment(cls, transaction_id, amount, reason=""):
+        """Initiate refund with Paystack"""
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "transaction": transaction_id,
+            "amount": int(amount * 100),  # Convert to kobo
+            "reason": reason or "Customer request"
+        }
+        
+        try:
+            response = requests.post(
+                f"{cls.BASE_URL}/refund",
+                json=payload,
+                headers=headers,
+                timeout=30
+            )
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {"status": False, "message": str(e)}
+
+
+# ============================================================================
+# EMAIL HELPERS
 # ============================================================================
 
 def send_payment_confirmation_email(transaction):
@@ -30,7 +109,7 @@ def send_payment_confirmation_email(transaction):
             subject=f"Payment Confirmed - Order {transaction.order.order_number}",
             message=(
                 f"Dear {transaction.order.customer_name},\n\n"
-                f"Your payment has been confirmed successfully.\n\n"
+                f"Your payment has been confirmed successfully via Paystack.\n\n"
                 f"Order Number: {transaction.order.order_number}\n"
                 f"Amount Paid: ₦{transaction.amount:,.2f}\n"
                 f"Transaction Reference: {transaction.reference}\n"
@@ -43,7 +122,7 @@ def send_payment_confirmation_email(transaction):
             fail_silently=True,
         )
     except Exception:
-        pass  # Email failure should never block payment flow
+        pass
 
 
 def send_payment_failed_email(transaction):
@@ -75,7 +154,7 @@ def send_refund_confirmation_email(transaction, reason=''):
             subject=f"Refund Initiated - Order {transaction.order.order_number}",
             message=(
                 f"Dear {transaction.order.customer_name},\n\n"
-                f"A refund has been initiated for your order.\n\n"
+                f"A refund has been initiated for your order via Paystack.\n\n"
                 f"Order Number: {transaction.order.order_number}\n"
                 f"Refund Amount: ₦{transaction.amount:,.2f}\n"
                 f"Transaction Reference: {transaction.reference}\n"
@@ -92,21 +171,21 @@ def send_refund_confirmation_email(transaction, reason=''):
 
 
 # ============================================================================
-# INITIATE PAYMENT
+# INITIATE PAYMENT (PAYSTACK)
 # ============================================================================
 
 class InitiatePaymentView(APIView):
     """
     POST /api/payments/initialize/
 
-    Initiate a Flutterwave payment for an existing order.
+    Initiate a Paystack payment for an existing order.
     Authenticated users only.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     @swagger_auto_schema(
         operation_summary="Initiate Payment",
-        operation_description="Initiate a Flutterwave payment for an existing pending order.",
+        operation_description="Initiate a Paystack payment for an existing pending order.",
         request_body=InitiatePaymentSerializer,
         responses={
             200: openapi.Response(description="Payment link generated successfully."),
@@ -160,90 +239,81 @@ class InitiatePaymentView(APIView):
             status='pending'
         )
 
-        # Prepare Flutterwave payload
-        flutterwave_payload = {
-            "tx_ref": tx_ref,
-            "amount": str(order.total_amount),
-            "currency": "NGN",
-            "redirect_url": f"{settings.FRONTEND_URL}/payment/verify",
-            "customer": {
-                "email": customer_email,
-                "name": order.customer_name,
-                "phonenumber": request.user.phone_number or ""
-            },
-            "customizations": {
-                "title": "M&C Cakes Payment",
-                "description": f"Payment for Order {order.order_number}"
-            },
-            "meta": {
+        # Initialize Paystack payment
+        paystack_service = PaystackService()
+        result = paystack_service.initialize_payment(
+            email=customer_email,
+            amount=float(order.total_amount),
+            reference=tx_ref,
+            metadata={
                 "order_number": order.order_number,
                 "user_id": request.user.id,
                 "transaction_ref": tx_ref
             }
-        }
+        )
 
-        headers = {
-            "Authorization": f"Bearer {settings.FLUTTERWAVE_SECRET_KEY}",
-            "Content-Type": "application/json"
-        }
+        # Store the complete response
+        transaction.gateway_response = result
 
-        try:
-            response = requests.post(
-                "https://api.flutterwave.com/v3/payments",
-                json=flutterwave_payload,
-                headers=headers,
-                timeout=30
-            )
-            response_data = response.json()
-
-            if response.status_code == 200 and response_data.get('status') == 'success':
-                return Response({
-                    'message': 'Payment initiated successfully.',
-                    'payment_link': response_data['data']['link'],
-                    'tx_ref': tx_ref,
-                    'order_number': order.order_number,
-                    'amount': str(order.total_amount),
-                }, status=status.HTTP_200_OK)
-            else:
-                transaction.status = 'failed'
-                transaction.save()
-                return Response({
-                    'error': 'Failed to initiate payment with Flutterwave.',
-                    'details': response_data
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-        except requests.exceptions.RequestException as e:
+        if result.get('status') and result.get('data', {}).get('authorization_url'):
+            # Update transaction with Paystack-specific data
+            transaction.paystack_access_code = result['data'].get('access_code', '')
+            transaction.save()
+            
+            return Response({
+                'message': 'Payment initiated successfully.',
+                'payment_link': result['data']['authorization_url'],
+                'reference': tx_ref,
+                'order_number': order.order_number,
+                'amount': str(order.total_amount),
+            }, status=status.HTTP_200_OK)
+        else:
             transaction.status = 'failed'
             transaction.save()
-            return Response(
-                {'error': f'Could not connect to Flutterwave: {str(e)}'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
+            
+            error_message = result.get('message', 'Failed to initiate payment with Paystack.')
+            return Response({
+                'error': error_message,
+                'details': result
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ============================================================================
-# VERIFY PAYMENT
+# VERIFY PAYMENT (PAYSTACK)
 # ============================================================================
 
 class VerifyPaymentView(APIView):
     """
-    GET /api/payments/verify/{reference}/
+    GET /api/payments/verify/?reference={reference}&trxref={trxref}
 
-    Verify a Flutterwave payment after the user is redirected back.
-    Public endpoint — called after Flutterwave redirect.
+    Verify a Paystack payment after the user is redirected back.
+    Public endpoint — called after Paystack redirect.
     """
     permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
         operation_summary="Verify Payment",
-        operation_description="Verify a Flutterwave payment using the transaction reference after redirect.",
+        operation_description="Verify a Paystack payment using the transaction reference after redirect.",
+        manual_parameters=[
+            openapi.Parameter('reference', openapi.IN_QUERY, type=openapi.TYPE_STRING, description='Paystack transaction reference'),
+            openapi.Parameter('trxref', openapi.IN_QUERY, type=openapi.TYPE_STRING, description='Alternative reference (Paystack sends both)'),
+        ],
         responses={
             200: openapi.Response(description="Payment verified successfully."),
             400: openapi.Response(description="Payment verification failed."),
             404: openapi.Response(description="Transaction not found."),
         }
     )
-    def get(self, request, reference):
+    def get(self, request):
+        # Paystack sends both reference and trxref as query params
+        reference = request.query_params.get('reference') or request.query_params.get('trxref')
+        
+        if not reference:
+            return Response(
+                {'error': 'Reference parameter is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             transaction = Transaction.objects.get(reference=reference)
         except Transaction.DoesNotExist:
@@ -259,83 +329,76 @@ class VerifyPaymentView(APIView):
                 'transaction': TransactionSerializer(transaction).data
             }, status=status.HTTP_200_OK)
 
-        # Flutterwave sends transaction_id as query param after redirect
-        flutterwave_tx_id = request.query_params.get('transaction_id')
-        if not flutterwave_tx_id:
-            return Response(
-                {'error': 'transaction_id query parameter is required.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Verify with Paystack
+        paystack_service = PaystackService()
+        result = paystack_service.verify_payment(reference)
+        
+        # Store verification response
+        transaction.gateway_response = result
 
-        headers = {
-            "Authorization": f"Bearer {settings.FLUTTERWAVE_SECRET_KEY}"
-        }
+        if result.get('status') and result.get('data', {}).get('status') == 'success':
+            paystack_data = result['data']
+            
+            # Verify amount matches to prevent fraud (convert to kobo for comparison)
+            expected_amount = int(transaction.amount * 100)
+            actual_amount = paystack_data.get('amount', 0)
+            
+            if actual_amount == expected_amount:
+                # Update transaction
+                transaction.status = 'completed'
+                transaction.paystack_transaction_id = str(paystack_data.get('id', ''))
+                transaction.save()
 
-        try:
-            response = requests.get(
-                f"https://api.flutterwave.com/v3/transactions/{flutterwave_tx_id}/verify",
-                headers=headers,
-                timeout=30
-            )
-            response_data = response.json()
-        except requests.exceptions.RequestException as e:
-            return Response(
-                {'error': f'Could not connect to Flutterwave: {str(e)}'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
+                # Update order
+                order = transaction.order
+                if order:
+                    order.payment_status = 'paid'
+                    order.paystack_transaction_id = str(paystack_data.get('id', ''))
+                    order.paystack_reference = reference
+                    order.paystack_response = paystack_data
+                    order.payment_date = timezone.now()
+                    order.status = 'confirmed'
+                    order.save()
 
-        if response_data.get('status') != 'success':
-            return Response(
-                {'error': 'Failed to verify transaction with Flutterwave.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                    OrderHistory.objects.create(
+                        order=order,
+                        action='payment_received',
+                        description=f"Payment received via Paystack. Reference: {reference}",
+                        changed_by=transaction.user,
+                        old_value='pending',
+                        new_value='paid'
+                    )
 
-        flutterwave_data = response_data.get('data', {})
+                    # Deactivate cart
+                    if order.cart:
+                        order.cart.is_active = False
+                        order.cart.save()
 
-        # Verify amount and currency match to prevent fraud
-        if (flutterwave_data.get('status') == 'successful'
-                and float(flutterwave_data.get('amount', 0)) == float(transaction.amount)
-                and flutterwave_data.get('currency') == transaction.currency):
+                # Send payment confirmation email
+                send_payment_confirmation_email(transaction)
 
-            # Update transaction
-            transaction.status = 'completed'
-            transaction.flutterwave_transaction_id = str(flutterwave_tx_id)
-            transaction.save()
+                return Response({
+                    'message': 'Payment verified successfully.',
+                    'transaction': TransactionSerializer(transaction).data
+                }, status=status.HTTP_200_OK)
+            else:
+                # Amount mismatch — possible fraud attempt
+                transaction.status = 'failed'
+                transaction.save()
 
-            # Update order
-            order = transaction.order
-            if order:
-                order.payment_status = 'paid'
-                order.flutterwave_transaction_id = str(flutterwave_tx_id)
-                order.flutterwave_reference = reference
-                order.payment_date = timezone.now()
-                order.status = 'confirmed'
-                order.save()
+                if transaction.order:
+                    transaction.order.payment_status = 'failed'
+                    transaction.order.save()
 
-                OrderHistory.objects.create(
-                    order=order,
-                    action='payment_received',
-                    description=f"Payment received via Flutterwave. Reference: {reference}",
-                    changed_by=transaction.user,
-                    old_value='pending',
-                    new_value='paid'
-                )
+                send_payment_failed_email(transaction)
 
-                # Deactivate cart
-                if order.cart:
-                    order.cart.is_active = False
-                    order.cart.save()
-
-            # Send payment confirmation email
-            send_payment_confirmation_email(transaction)
-
-            return Response({
-                'message': 'Payment verified successfully.',
-                'transaction': TransactionSerializer(transaction).data
-            }, status=status.HTTP_200_OK)
-
+                return Response({
+                    'error': 'Payment verification failed. Amount mismatch.',
+                    'expected_amount_kobo': expected_amount,
+                    'actual_amount_kobo': actual_amount
+                }, status=status.HTTP_400_BAD_REQUEST)
         else:
-            # Amount or currency mismatch — possible fraud attempt
+            # Payment failed or not successful
             transaction.status = 'failed'
             transaction.save()
 
@@ -347,12 +410,13 @@ class VerifyPaymentView(APIView):
             send_payment_failed_email(transaction)
 
             return Response({
-                'error': 'Payment verification failed. Amount or currency mismatch.',
+                'error': 'Payment verification failed.',
+                'details': result.get('message', 'Unknown error')
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ============================================================================
-# REFUND PAYMENT
+# REFUND PAYMENT (PAYSTACK)
 # ============================================================================
 
 class RefundPaymentView(APIView):
@@ -366,7 +430,7 @@ class RefundPaymentView(APIView):
 
     @swagger_auto_schema(
         operation_summary="Refund Payment (Admin)",
-        operation_description="Initiate a refund for a completed Flutterwave transaction. Admin only.",
+        operation_description="Initiate a refund for a completed Paystack transaction. Admin only.",
         request_body=RefundPaymentSerializer,
         responses={
             200: openapi.Response(description="Refund initiated successfully."),
@@ -389,9 +453,9 @@ class RefundPaymentView(APIView):
                 'error': f'Cannot refund a transaction with status: {transaction.get_status_display()}'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        if not transaction.flutterwave_transaction_id:
+        if not transaction.paystack_transaction_id:
             return Response(
-                {'error': 'No Flutterwave transaction ID found for this transaction.'},
+                {'error': 'No Paystack transaction ID found for this transaction.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -399,30 +463,18 @@ class RefundPaymentView(APIView):
         serializer.is_valid(raise_exception=True)
         reason = serializer.validated_data.get('reason', '')
 
-        headers = {
-            "Authorization": f"Bearer {settings.FLUTTERWAVE_SECRET_KEY}",
-            "Content-Type": "application/json"
-        }
+        # Initialize Paystack refund
+        paystack_service = PaystackService()
+        result = paystack_service.refund_payment(
+            transaction_id=transaction.paystack_transaction_id,
+            amount=float(transaction.amount),
+            reason=reason
+        )
 
-        refund_payload = {
-            "amount": str(transaction.amount)
-        }
+        # Store refund response
+        transaction.gateway_response = result
 
-        try:
-            response = requests.post(
-                f"https://api.flutterwave.com/v3/transactions/{transaction.flutterwave_transaction_id}/refund",
-                json=refund_payload,
-                headers=headers,
-                timeout=30
-            )
-            response_data = response.json()
-        except requests.exceptions.RequestException as e:
-            return Response(
-                {'error': f'Could not connect to Flutterwave: {str(e)}'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
-
-        if response_data.get('status') == 'success':
+        if result.get('status'):
             # Update transaction
             transaction.status = 'refunded'
             transaction.save()
@@ -435,7 +487,7 @@ class RefundPaymentView(APIView):
                 OrderHistory.objects.create(
                     order=transaction.order,
                     action='refunded',
-                    description=f"Refund initiated by admin. Reason: {reason if reason else 'No reason provided'}",
+                    description=f"Refund initiated via Paystack by admin. Reason: {reason if reason else 'No reason provided'}",
                     changed_by=request.user,
                     old_value='paid',
                     new_value='refunded'
@@ -446,11 +498,11 @@ class RefundPaymentView(APIView):
 
             return Response({
                 'message': 'Refund initiated successfully.',
-                'transaction': TransactionSerializer(transaction).data
+                'transaction': TransactionSerializer(transaction).data,
+                'refund_response': result.get('data')
             }, status=status.HTTP_200_OK)
-
         else:
             return Response({
                 'error': 'Refund failed.',
-                'details': response_data
+                'details': result.get('message', 'Unknown error')
             }, status=status.HTTP_400_BAD_REQUEST)
