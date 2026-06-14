@@ -11,14 +11,15 @@ class TransactionAdmin(admin.ModelAdmin):
         'currency',
         'status',
         'order',
-        'flutterwave_transaction_id',
+        'paystack_transaction_id',
         'created_at',
     )
     list_filter = ('status', 'currency', 'created_at')
-    search_fields = ('email', 'reference', 'flutterwave_transaction_id', 'order__order_number')
+    search_fields = ('email', 'reference', 'paystack_transaction_id', 'order__order_number')
     readonly_fields = (
         'reference',
-        'flutterwave_transaction_id',
+        'paystack_transaction_id',
+        'paystack_access_code',
         'order',
         'cart',
         'email',
@@ -27,18 +28,24 @@ class TransactionAdmin(admin.ModelAdmin):
         'user',
         'created_at',
         'modified_at',
+        'gateway_response',
     )
     actions = ['mark_as_refunded']
 
     fieldsets = [
         ('Transaction Info', {
-            'fields': ['reference', 'flutterwave_transaction_id', 'status']
+            'fields': ['reference', 'paystack_transaction_id', 'paystack_access_code', 'status']
         }),
         ('Customer', {
             'fields': ['user', 'email']
         }),
         ('Payment Details', {
             'fields': ['amount', 'currency', 'order', 'cart']
+        }),
+        ('Gateway Response', {
+            'fields': ['gateway_response'],
+            'classes': ['collapse'],
+            'description': 'Complete Paystack API response (for debugging)'
         }),
         ('Timestamps', {
             'fields': ['created_at', 'modified_at'],
