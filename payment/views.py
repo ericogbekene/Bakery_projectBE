@@ -23,6 +23,8 @@ from .serializers import (
 # PAYSTACK SERVICE
 # ============================================================================
 
+# payment/views.py
+
 class PaystackService:
     """Service class for Paystack API integration"""
     
@@ -36,13 +38,19 @@ class PaystackService:
             "Content-Type": "application/json"
         }
         
+        # ✅ Use the callback URL from settings
+        callback_url = settings.PAYSTACK_CALLBACK_URL
+        
         payload = {
             "email": email,
-            "amount": int(amount * 100),  # Convert to kobo/cents
+            "amount": int(amount * 100),
             "reference": reference,
-            "callback_url": f"{settings.FRONTEND_URL}/payment/verify",
+            "callback_url": callback_url,
             "metadata": metadata or {}
         }
+        
+        print(f"📡 Paystack Payload: {payload}")
+        print(f"📡 Callback URL: {callback_url}")
         
         try:
             response = requests.post(
@@ -51,9 +59,14 @@ class PaystackService:
                 headers=headers,
                 timeout=30
             )
+            print(f"📡 Paystack Response Status: {response.status_code}")
+            print(f"📡 Paystack Response: {response.json()}")
             return response.json()
         except requests.exceptions.RequestException as e:
+            print(f"❌ Paystack Request Error: {e}")
             return {"status": False, "message": str(e)}
+        
+
     
     @classmethod
     def verify_payment(cls, reference):
@@ -177,7 +190,6 @@ def send_refund_confirmation_email(transaction, reason=''):
 class InitiatePaymentView(APIView):
     """
     POST /api/payments/initialize/
-
     Initiate a Paystack payment for an existing order.
     Authenticated users only.
     """
@@ -194,40 +206,83 @@ class InitiatePaymentView(APIView):
         }
     )
     def post(self, request):
+        # ✅ DEBUG: Log authentication info
+        print("=" * 60)
+        print("🔐 PAYMENT INITIALIZATION DEBUG")
+        print(f"Authorization Header: {request.headers.get('Authorization', 'Not provided')}")
+        print(f"User: {request.user}")
+        print(f"Is Authenticated: {request.user.is_authenticated if hasattr(request.user, 'is_authenticated') else False}")
+        print(f"User ID: {request.user.id if hasattr(request.user, 'id') else 'None'}")
+        print(f"User Email: {request.user.email if hasattr(request.user, 'email') else 'None'}")
+        print(f"Request Data: {request.data}")
+        print("=" * 60)
+        
+        # ✅ Validate serializer
         serializer = InitiatePaymentSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            print(f"❌ Serializer errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         order_number = serializer.validated_data['order_number']
+        print(f"🔍 Order number from request: {order_number}")
 
+        # ✅ Get order by number only (don't require user match)
         try:
-            order = Order.objects.get(
-                order_number=order_number,
-                user=request.user
-            )
+            order = Order.objects.get(order_number=order_number)
+            print(f"✅ Order found: {order.id} - {order.order_number}")
         except Order.DoesNotExist:
+            print(f"❌ Order not found: {order_number}")
             return Response(
                 {'error': 'Order not found.'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Only pending orders can be paid for
+        # ✅ If order was created by guest (no user), associate with authenticated user
+        if not order.user:
+            print(f"🔍 Guest order detected - associating with user {request.user.email}")
+            order.user = request.user
+            order.save()
+            
+            # Create history entry
+            OrderHistory.objects.create(
+                order=order,
+                action='status_changed',
+                description=f"Guest order associated with user {request.user.email} during payment",
+                changed_by=request.user,
+                old_value='guest',
+                new_value='authenticated'
+            )
+
+        # ✅ Check if user owns the order now
+        if order.user != request.user and not request.user.is_staff:
+            print(f"❌ Permission denied: User {request.user.email} does not own order {order.order_number}")
+            return Response({
+                'error': 'You do not have permission to pay for this order.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # ✅ Check order status
         if order.status != 'pending':
+            print(f"❌ Order status invalid: {order.status}")
             return Response({
                 'error': f'Cannot initiate payment for order with status: {order.get_status_display()}'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if order already has a completed payment
+        # ✅ Check if order already has a completed payment
         if order.payment_status == 'paid':
+            print(f"❌ Order already paid: {order.payment_status}")
             return Response(
                 {'error': 'This order has already been paid for.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Generate unique transaction reference
+        # ✅ Generate unique transaction reference
         tx_ref = str(uuid.uuid4())
-        customer_email = request.user.email
+        customer_email = request.user.email or order.customer_email
+        print(f"🔍 Transaction reference: {tx_ref}")
+        print(f"🔍 Customer email: {customer_email}")
+        print(f"🔍 Amount: {float(order.total_amount)}")
 
-        # Create transaction record
+        # ✅ Create transaction record
         transaction = Transaction.objects.create(
             reference=tx_ref,
             order=order,
@@ -238,8 +293,9 @@ class InitiatePaymentView(APIView):
             user=request.user,
             status='pending'
         )
+        print(f"✅ Transaction created: {transaction.id}")
 
-        # Initialize Paystack payment
+        # ✅ Initialize Paystack payment
         paystack_service = PaystackService()
         result = paystack_service.initialize_payment(
             email=customer_email,
@@ -252,13 +308,19 @@ class InitiatePaymentView(APIView):
             }
         )
 
-        # Store the complete response
+        # ✅ Store the complete response
         transaction.gateway_response = result
+        transaction.save()
+        
+        print(f"🔍 Paystack response status: {result.get('status')}")
+        print(f"🔍 Paystack response data: {result.get('data', {})}")
 
         if result.get('status') and result.get('data', {}).get('authorization_url'):
             # Update transaction with Paystack-specific data
             transaction.paystack_access_code = result['data'].get('access_code', '')
             transaction.save()
+            
+            print(f"✅ Payment link generated: {result['data']['authorization_url']}")
             
             return Response({
                 'message': 'Payment initiated successfully.',
@@ -272,11 +334,19 @@ class InitiatePaymentView(APIView):
             transaction.save()
             
             error_message = result.get('message', 'Failed to initiate payment with Paystack.')
+            print(f"❌ Paystack initialization failed: {error_message}")
+            
             return Response({
                 'error': error_message,
                 'details': result
             }, status=status.HTTP_400_BAD_REQUEST)
 
+
+# ============================================================================
+# VERIFY PAYMENT (PAYSTACK)
+# ============================================================================
+
+# payment/views.py
 
 # ============================================================================
 # VERIFY PAYMENT (PAYSTACK)
@@ -305,18 +375,34 @@ class VerifyPaymentView(APIView):
         }
     )
     def get(self, request):
-        # Paystack sends both reference and trxref as query params
-        reference = request.query_params.get('reference') or request.query_params.get('trxref')
+        # ✅ DEBUG: Log verification info
+        print("=" * 60)
+        print("🔐 PAYMENT VERIFICATION DEBUG")
+        print(f"Query Params: {request.query_params}")
+        print("=" * 60)
+        
+        # ✅ Use VerifyPaymentSerializer for validation
+        serializer = VerifyPaymentSerializer(data=request.query_params)
+        if not serializer.is_valid():
+            print(f"❌ Serializer errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        reference = serializer.validated_data.get('reference') or serializer.validated_data.get('trxref')
         
         if not reference:
+            print("❌ No reference provided")
             return Response(
                 {'error': 'Reference parameter is required.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        print(f"🔍 Verifying reference: {reference}")
+
         try:
             transaction = Transaction.objects.get(reference=reference)
+            print(f"✅ Transaction found: {transaction.id}")
         except Transaction.DoesNotExist:
+            print(f"❌ Transaction not found: {reference}")
             return Response(
                 {'error': 'Transaction not found.'},
                 status=status.HTTP_404_NOT_FOUND
@@ -324,6 +410,7 @@ class VerifyPaymentView(APIView):
 
         # Don't re-verify already completed transactions
         if transaction.status == 'completed':
+            print(f"ℹ️ Transaction already completed: {transaction.status}")
             return Response({
                 'message': 'Payment already verified.',
                 'transaction': TransactionSerializer(transaction).data
@@ -333,8 +420,11 @@ class VerifyPaymentView(APIView):
         paystack_service = PaystackService()
         result = paystack_service.verify_payment(reference)
         
+        print(f"🔍 Paystack verification response status: {result.get('status')}")
+        
         # Store verification response
         transaction.gateway_response = result
+        transaction.save()
 
         if result.get('status') and result.get('data', {}).get('status') == 'success':
             paystack_data = result['data']
@@ -343,11 +433,15 @@ class VerifyPaymentView(APIView):
             expected_amount = int(transaction.amount * 100)
             actual_amount = paystack_data.get('amount', 0)
             
+            print(f"🔍 Expected amount (kobo): {expected_amount}")
+            print(f"🔍 Actual amount (kobo): {actual_amount}")
+            
             if actual_amount == expected_amount:
                 # Update transaction
                 transaction.status = 'completed'
                 transaction.paystack_transaction_id = str(paystack_data.get('id', ''))
                 transaction.save()
+                print(f"✅ Transaction updated to completed")
 
                 # Update order
                 order = transaction.order
@@ -359,6 +453,7 @@ class VerifyPaymentView(APIView):
                     order.payment_date = timezone.now()
                     order.status = 'confirmed'
                     order.save()
+                    print(f"✅ Order updated: {order.order_number} - status: confirmed, payment: paid")
 
                     OrderHistory.objects.create(
                         order=order,
@@ -373,16 +468,23 @@ class VerifyPaymentView(APIView):
                     if order.cart:
                         order.cart.is_active = False
                         order.cart.save()
+                        print(f"✅ Cart deactivated: {order.cart.id}")
 
                 # Send payment confirmation email
                 send_payment_confirmation_email(transaction)
+                print(f"✅ Confirmation email sent")
 
-                return Response({
+                # ✅ Return response with VerifyPaymentSerializer data
+                response_data = VerifyPaymentSerializer({
+                    'status': 'success',
                     'message': 'Payment verified successfully.',
                     'transaction': TransactionSerializer(transaction).data
-                }, status=status.HTTP_200_OK)
+                }).data
+
+                return Response(response_data, status=status.HTTP_200_OK)
             else:
                 # Amount mismatch — possible fraud attempt
+                print(f"❌ Amount mismatch! Expected: {expected_amount}, Actual: {actual_amount}")
                 transaction.status = 'failed'
                 transaction.save()
 
@@ -392,13 +494,17 @@ class VerifyPaymentView(APIView):
 
                 send_payment_failed_email(transaction)
 
-                return Response({
-                    'error': 'Payment verification failed. Amount mismatch.',
+                response_data = VerifyPaymentSerializer({
+                    'status': 'failed',
+                    'message': 'Payment verification failed. Amount mismatch.',
                     'expected_amount_kobo': expected_amount,
                     'actual_amount_kobo': actual_amount
-                }, status=status.HTTP_400_BAD_REQUEST)
+                }).data
+
+                return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
         else:
             # Payment failed or not successful
+            print(f"❌ Payment verification failed: {result.get('message', 'Unknown error')}")
             transaction.status = 'failed'
             transaction.save()
 
@@ -409,11 +515,13 @@ class VerifyPaymentView(APIView):
             # Send payment failed email
             send_payment_failed_email(transaction)
 
-            return Response({
-                'error': 'Payment verification failed.',
+            response_data = VerifyPaymentSerializer({
+                'status': 'failed',
+                'message': 'Payment verification failed.',
                 'details': result.get('message', 'Unknown error')
-            }, status=status.HTTP_400_BAD_REQUEST)
+            }).data
 
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
 
 # ============================================================================
 # REFUND PAYMENT (PAYSTACK)
@@ -439,9 +547,17 @@ class RefundPaymentView(APIView):
         }
     )
     def post(self, request, reference):
+        print("=" * 60)
+        print("🔐 REFUND INITIALIZATION DEBUG")
+        print(f"Reference: {reference}")
+        print(f"User: {request.user}")
+        print("=" * 60)
+        
         try:
             transaction = Transaction.objects.get(reference=reference)
+            print(f"✅ Transaction found: {transaction.id}")
         except Transaction.DoesNotExist:
+            print(f"❌ Transaction not found: {reference}")
             return Response(
                 {'error': 'Transaction not found.'},
                 status=status.HTTP_404_NOT_FOUND
@@ -449,11 +565,13 @@ class RefundPaymentView(APIView):
 
         # Only completed transactions can be refunded
         if transaction.status != 'completed':
+            print(f"❌ Transaction not completed: {transaction.status}")
             return Response({
                 'error': f'Cannot refund a transaction with status: {transaction.get_status_display()}'
             }, status=status.HTTP_400_BAD_REQUEST)
 
         if not transaction.paystack_transaction_id:
+            print(f"❌ No Paystack transaction ID found")
             return Response(
                 {'error': 'No Paystack transaction ID found for this transaction.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -462,6 +580,7 @@ class RefundPaymentView(APIView):
         serializer = RefundPaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         reason = serializer.validated_data.get('reason', '')
+        print(f"🔍 Refund reason: {reason}")
 
         # Initialize Paystack refund
         paystack_service = PaystackService()
@@ -473,16 +592,21 @@ class RefundPaymentView(APIView):
 
         # Store refund response
         transaction.gateway_response = result
+        transaction.save()
+        
+        print(f"🔍 Paystack refund response status: {result.get('status')}")
 
         if result.get('status'):
             # Update transaction
             transaction.status = 'refunded'
             transaction.save()
+            print(f"✅ Transaction updated to refunded")
 
             # Update order
             if transaction.order:
                 transaction.order.payment_status = 'refunded'
                 transaction.order.save()
+                print(f"✅ Order payment status updated to refunded")
 
                 OrderHistory.objects.create(
                     order=transaction.order,
@@ -495,6 +619,7 @@ class RefundPaymentView(APIView):
 
             # Send refund confirmation email
             send_refund_confirmation_email(transaction, reason)
+            print(f"✅ Refund confirmation email sent")
 
             return Response({
                 'message': 'Refund initiated successfully.',
@@ -502,7 +627,9 @@ class RefundPaymentView(APIView):
                 'refund_response': result.get('data')
             }, status=status.HTTP_200_OK)
         else:
+            error_message = result.get('message', 'Unknown error')
+            print(f"❌ Refund failed: {error_message}")
             return Response({
                 'error': 'Refund failed.',
-                'details': result.get('message', 'Unknown error')
+                'details': error_message
             }, status=status.HTTP_400_BAD_REQUEST)

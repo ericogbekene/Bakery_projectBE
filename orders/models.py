@@ -962,7 +962,9 @@ def create_order_from_cart(cart, customer_data, delivery_data, payment_method=''
             changed_by=cart.user
         )
         
-        # 5. Deactivate the cart
+        # ✅ CRITICAL FIX: Deactivate the cart AFTER order is fully created
+        # This prevents the cart from being used again
+        # But we keep the cart reference in the order for history
         cart.is_active = False
         cart.save()
         

@@ -65,6 +65,19 @@ class OrderDeliverySerializer(serializers.ModelSerializer):
     """
     Serializer for order delivery information.
     """
+    delivery_time_slot = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        default=""
+    )
+    special_instructions = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        default=""
+    )
+
     class Meta:
         model = OrderDelivery
         fields = [
@@ -152,17 +165,11 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     """
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
-
-    # Payment method is always Paystack
     payment_method_display = serializers.SerializerMethodField()
-
-    # Related objects
     items = OrderItemSerializer(many=True, read_only=True)
     delivery = OrderDeliverySerializer(read_only=True)
     history = OrderHistorySerializer(many=True, read_only=True)
     payments = OrderPaymentSerializer(many=True, read_only=True)
-
-    # Customer info
     customer_type = serializers.SerializerMethodField()
 
     class Meta:
@@ -224,14 +231,24 @@ class CreateOrderSerializer(serializers.Serializer):
     # Delivery information
     delivery_address = serializers.CharField()
     delivery_city = serializers.CharField()
-    delivery_state = serializers.CharField(required=False, allow_blank=True)
-    delivery_postal_code = serializers.CharField(required=False, allow_blank=True)
+    delivery_state = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
+    delivery_postal_code = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
     delivery_date = serializers.DateField()
-    delivery_time_slot = serializers.CharField(required=False, allow_blank=True)
-    special_instructions = serializers.CharField(required=False, allow_blank=True)
 
-    # Paystack reference (optional - can be generated on the backend)
-    paystack_reference = serializers.CharField(required=False, allow_blank=True)
+    delivery_time_slot = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        default=""
+    )
+    special_instructions = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        default=""
+    )
+
+    paystack_reference = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
 
     def validate_delivery_date(self, value):
         """Ensure delivery date is not in the past."""
@@ -240,18 +257,41 @@ class CreateOrderSerializer(serializers.Serializer):
         return value
 
     def validate(self, data):
-        """Validate order can be created."""
+        """Validate order can be created - WITHOUT session access."""
         request = self.context.get('request')
-        if not request:
-            raise serializers.ValidationError("Request context required.")
+        
+        # ✅ Try to get cart WITHOUT accessing session
+        cart = None
+        
+        # First, try to get cart from the view context (set by the view)
+        if 'cart' in self.context:
+            cart = self.context['cart']
+        
+        # If not in context, try to get from request
+        if not cart and request:
+            # For authenticated users - get cart from user
+            try:
+                if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+                    cart = Cart.objects.filter(user=request.user, is_active=True).first()
+            except Exception:
+                # If any error occurs (session issue), treat as guest
+                pass
+            
+            # For guest users - try to get cart from session WITHOUT causing errors
+            if not cart and hasattr(request, 'session'):
+                try:
+                    cart_id = request.session.get('cart_id')
+                    if cart_id:
+                        cart = Cart.objects.filter(id=cart_id, is_active=True).first()
+                except Exception:
+                    # If session access fails, continue as guest
+                    pass
 
-        # Get cart
-        from cart.utils import get_or_create_cart
-        cart = get_or_create_cart(request)
+        if not cart:
+            raise serializers.ValidationError({"cart": "No active cart found. Please add items to your cart."})
 
-        # Check if cart has items
         if cart.items.count() == 0:
-            raise serializers.ValidationError("Cannot create order from empty cart.")
+            raise serializers.ValidationError({"cart": "Cart is empty. Please add items before ordering."})
 
         # Store cart in context for the view
         self.context['cart'] = cart
