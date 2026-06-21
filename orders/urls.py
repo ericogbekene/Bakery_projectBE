@@ -1,5 +1,8 @@
 from django.urls import path
 from . import views
+from .views import CheckoutOrderView
+
+
 
 app_name = 'orders-api'
 
@@ -11,6 +14,8 @@ urlpatterns = [
     path('<int:id>/cancel/', views.CancelOrderView.as_view(), name='order-cancel'),
     path('<int:id>/track/', views.TrackOrderView.as_view(), name='order-track'),
     path('track/', views.TrackOrderByNumberView.as_view(), name='order-track-by-number'),
+    path('orders/<int:id>/checkout/', CheckoutOrderView.as_view(), name='order-checkout'),
+    
 
     # Admin endpoints — stats must come before <int:id> patterns to avoid routing conflict
     path('admin/stats/', views.AdminOrderStatsView.as_view(), name='order-stats'),

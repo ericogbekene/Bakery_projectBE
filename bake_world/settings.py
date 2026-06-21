@@ -16,13 +16,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ---------------------------------------------------------------------------
 # Core settings — all driven by .env via python-decouple
-# No need for load_dotenv; decouple reads .env automatically
 # ---------------------------------------------------------------------------
 SECRET_KEY = config("DJANGO_SECRET_KEY", default="replace-this-in-production!")
 DEBUG = config("DEBUG", default=True, cast=bool)
 IS_PRODUCTION = config("IS_PRODUCTION", default=False, cast=bool)
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
+ALLOWED_HOSTS = list(ALLOWED_HOSTS) + [
+    "muster-shale-trance.ngrok-free.dev",
+    "*.ngrok-free.dev",  # Allow all ngrok subdomains
+]
+
+if not IS_PRODUCTION:
+    ALLOWED_HOSTS.extend([
+        "muster-shale-trance.ngrok-free.dev",
+        "*.ngrok-free.dev",  # Allow all ngrok subdomains
+        "*.ngrok.io",  # Allow old ngrok domains
+    ])
 
 # ---------------------------------------------------------------------------
 # CSRF
@@ -36,6 +46,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
     "http://localhost:5173",
+    "https://muster-shale-trance.ngrok-free.dev",
+    "https://*.ngrok-free.dev",
 ]
 
 CSRF_COOKIE_HTTPONLY = False
@@ -47,27 +59,21 @@ CSRF_USE_SESSIONS = False
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://138.68.23.253",
+    "http://localhost:5173",
+    "https://muster-shale-trance.ngrok-free.dev",  # ✅ Add ngrok URL
+    "https://*.ngrok-free.dev",  # ✅ Allow all ngrok
+]
+
 if IS_PRODUCTION:
-    CORS_ALLOWED_ORIGINS = [
-        f"https://{host}"
-        for host in config("ALLOWED_HOSTS", default="").split(",")
-        if host.strip()
-        and not host.startswith("localhost")
-        and not host.startswith("127.0.0.1")
-    ]
     CORS_ALLOWED_ORIGINS.extend([
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
+        f"https://{host}" for host in ALLOWED_HOSTS if host.strip()
     ])
-else:
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://138.68.23.253",
-    ]
 
 CORS_ALLOW_HEADERS = [
     "accept",
@@ -100,7 +106,7 @@ CORS_PREFLIGHT_MAX_AGE = 86400
 # ---------------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------------
-SECURE_SSL_REDIRECT = False  # set True once SSL is confirmed working
+SECURE_SSL_REDIRECT = False
 
 if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
@@ -144,7 +150,7 @@ INSTALLED_APPS = [
 # Middleware
 # ---------------------------------------------------------------------------
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",  # must be first
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -225,7 +231,45 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
 }
+
+# ---------------------------------------------------------------------------
+# JWT Settings
+# ---------------------------------------------------------------------------
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': False,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'JTI_CLAIM': 'jti',
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+}
+
+# ---------------------------------------------------------------------------
+# Session Settings
+# ---------------------------------------------------------------------------
+CART_SESSION_ID = "cart"
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = False
+SESSION_COOKIE_HTTPONLY = True
 
 # ---------------------------------------------------------------------------
 # Internationalisation
@@ -265,7 +309,6 @@ CLOUDINARY_STORAGE = {
     "CLOUDINARY_API_SECRET": config("CLOUDINARY_API_SECRET", default=""),
 }
 
-# configures the SDK itself, not just the storage backend
 cloudinary.config(
     cloud_name=config("CLOUDINARY_CLOUD_NAME", default=""),
     api_key=config("CLOUDINARY_API_KEY", default=""),
@@ -282,21 +325,41 @@ CLOUDINARY_SETTINGS = {
 }
 
 # ---------------------------------------------------------------------------
-# Miscellaneous
+# Email
 # ---------------------------------------------------------------------------
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-CART_SESSION_ID = "cart"
-
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
+# ---------------------------------------------------------------------------
+# Paystack
+# ---------------------------------------------------------------------------
+# settings.py - Paystack section
 
 # ---------------------------------------------------------------------------
 # Paystack
 # ---------------------------------------------------------------------------
 PAYSTACK_SECRET_KEY = config("PAYSTACK_SECRET_KEY", default="")
 PAYSTACK_PUBLIC_KEY = config("PAYSTACK_PUBLIC_KEY", default="")
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
+
+# ✅ Use FRONTEND_URL for callback
+PAYSTACK_CALLBACK_URL = config(
+    "PAYSTACK_CALLBACK_URL", 
+    default=f"{FRONTEND_URL}/payment/verify"
+)
+
+
+# ✅ Debug: Print configuration
+print("=" * 60)
+print("🔐 PAYSTACK CONFIGURATION")
+print(f"PAYSTACK_SECRET_KEY set: {'Yes' if PAYSTACK_SECRET_KEY else 'No'}")
+print(f"PAYSTACK_PUBLIC_KEY set: {'Yes' if PAYSTACK_PUBLIC_KEY else 'No'}")
+print(f"FRONTEND_URL: {FRONTEND_URL}")
+print(f"PAYSTACK_CALLBACK_URL: {PAYSTACK_CALLBACK_URL}")
+print("=" * 60)
+# ---------------------------------------------------------------------------
+# Miscellaneous
+# ---------------------------------------------------------------------------
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
 # Jazzmin
@@ -313,29 +376,21 @@ JAZZMIN_SETTINGS = {
     "copyright": "Bakery Shop Ltd",
     "search_model": ["auth.User", "auth.Group"],
     "user_avatar": None,
-
-    # Top menu
     "topmenu_links": [
         {"name": "Home", "url": "admin:index", "permissions": ["auth.view_user"]},
         {"name": "Support", "url": "https://github.com/farridav/django-jazzmin/issues", "new_window": True},
         {"model": "auth.User"},
-        {"app": "products"},  # NOTE: was "books" in original — update if needed
+        {"app": "products"},
     ],
-
-    # User menu
     "usermenu_links": [
         {"name": "Support", "url": "https://github.com/farridav/django-jazzmin/issues", "new_window": True},
         {"model": "auth.user"},
     ],
-
-    # Side menu
     "show_sidebar": True,
     "navigation_expanded": True,
     "hide_apps": [],
     "hide_models": [],
     "order_with_respect_to": ["auth", "products", "products.author", "products.product"],
-
-    # Icons
     "icons": {
         "auth": "fas fa-users-cog",
         "auth.user": "fas fa-user",
@@ -343,15 +398,11 @@ JAZZMIN_SETTINGS = {
     },
     "default_icon_parents": "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",
-
-    # UI
     "related_modal_active": False,
     "custom_css": None,
     "use_google_fonts_cdn": True,
     "show_ui_builder": False,
     "custom_js": "staticfiles/jazzmin/js/jazzmin_tabs_fix.js",
-
-    # Change view
     "changeform_format": "horizontal_tabs",
     "changeform_format_overrides": {
         "auth.user": "collapsible",

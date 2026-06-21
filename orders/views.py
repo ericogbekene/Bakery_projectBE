@@ -76,6 +76,10 @@ class OrderDetailView(generics.RetrieveAPIView):
 
 
 class CreateOrderView(APIView):
+    """
+    POST /api/orders/create/
+    Create an order from the current cart. Supports both guest and authenticated users.
+    """
     permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
@@ -89,26 +93,89 @@ class CreateOrderView(APIView):
     )
     @transaction.atomic
     def post(self, request):
+        # ✅ DEBUG: Log session info
+        print("=" * 50)
+        print("CREATE ORDER - RAW REQUEST")
+        print("SESSION KEY:", request.session.session_key if hasattr(request, 'session') else 'NO SESSION')
+        print("SESSION DATA:", dict(request.session) if hasattr(request, 'session') else {})
+        print("AUTH HEADER:", request.headers.get('Authorization', 'None'))
+        print("=" * 50)
+        
+        # ✅ Use the SAME cart retrieval logic as the rest of the app
+        from cart.utils import get_or_create_cart
+        
+        # Try to get cart - if session is lost, this will create a new one
+        cart = get_or_create_cart(request)
+        
+        print(f"🔍 Cart found: {cart.id}")
+        print(f"🔍 Cart items: {cart.items.count()}")
+        print(f"🔍 Cart user: {cart.user}")
+        print(f"🔍 Cart is_active: {cart.is_active}")
+        
+        # ✅ Check if cart has items
+        if cart.items.count() == 0:
+            # If the cart is empty, try to find the original cart by looking up by user
+            # For authenticated users
+            if request.user and request.user.is_authenticated:
+                # Try to find any active cart with items for this user
+                user_cart = Cart.objects.filter(
+                    user=request.user, 
+                    is_active=True
+                ).exclude(id=cart.id).first()
+                
+                if user_cart and user_cart.items.count() > 0:
+                    print(f"✅ Found another active cart with items: {user_cart.id}")
+                    cart = user_cart
+                else:
+                    # Try to find any cart with items (even inactive)
+                    any_cart = Cart.objects.filter(user=request.user).order_by('-created_at').first()
+                    if any_cart and any_cart.items.count() > 0:
+                        print(f"✅ Found cart with items (reactivating): {any_cart.id}")
+                        any_cart.is_active = True
+                        any_cart.save()
+                        cart = any_cart
+            
+            # For guest users - try to find cart by session
+            if cart.items.count() == 0 and request.session.get('cart_id'):
+                session_cart_id = request.session.get('cart_id')
+                session_cart = Cart.objects.filter(id=session_cart_id, is_active=True).first()
+                if session_cart and session_cart.items.count() > 0:
+                    print(f"✅ Found cart from session: {session_cart.id}")
+                    cart = session_cart
+        
+        # Final check - if still empty, return error
+        if cart.items.count() == 0:
+            print("❌ Cart is empty after all attempts!")
+            return Response(
+                {'error': 'Cart is empty. Please add items before ordering.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        print(f"✅ Final cart: {cart.id} with {cart.items.count()} items")
+
+        # Create serializer with cart in context
         serializer = CreateOrderSerializer(
             data=request.data,
-            context={'request': request}
+            context={
+                'request': request,
+                'cart': cart
+            }
         )
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
-        cart = serializer.context['cart']
 
         delivery_info, _ = DeliveryInfo.objects.get_or_create(cart=cart)
 
         delivery_data = {
             'address': data['delivery_address'],
             'city': data['delivery_city'],
-            'state': data.get('delivery_state', ''),
-            'postal_code': data.get('delivery_postal_code', ''),
+            'state': data.get('delivery_state') or '',
+            'postal_code': data.get('delivery_postal_code') or '',
             'delivery_date': data['delivery_date'],
-            'delivery_time_slot': data.get('delivery_time_slot', ''),
-            'special_instructions': data.get('special_instructions', ''),
-            'delivery_fee': cart.delivery_cost,
+            'delivery_time_slot': data.get('delivery_time_slot') or '',
+            'special_instructions': data.get('special_instructions') or '',
+            'delivery_fee': cart.delivery_cost or Decimal('0.00'),
         }
 
         from orders.models import create_order_from_cart
@@ -122,6 +189,51 @@ class CreateOrderView(APIView):
             delivery_data=delivery_data,
         )
 
+        # ✅ Check if user is authenticated
+        is_authenticated = False
+        user = None
+        
+        try:
+            if hasattr(request, 'user') and request.user:
+                if request.user.is_authenticated:
+                    is_authenticated = True
+                    user = request.user
+        except Exception:
+            pass
+
+        if is_authenticated and user:
+            # Authenticated user - associate order with user
+            order.user = user
+            order.status = 'pending'
+            order.save()
+            
+            OrderHistory.objects.create(
+                order=order,
+                action='created',
+                description=f"Order created by {user.email}",
+                changed_by=user,
+                old_value='',
+                new_value='pending'
+            )
+            requires_auth = False
+            message = "Order created successfully. Proceed to payment."
+        else:
+            # Guest user
+            order.status = 'pending'
+            order.save()
+            
+            OrderHistory.objects.create(
+                order=order,
+                action='created',
+                description="Guest order created",
+                changed_by=None,
+                old_value='',
+                new_value='pending'
+            )
+            requires_auth = True
+            message = "Order created successfully. Please login to complete payment."
+
+        # Send confirmation email
         try:
             send_mail(
                 subject=f"Order Confirmation - {order.order_number}",
@@ -131,8 +243,8 @@ class CreateOrderView(APIView):
                     f"Order Number: {order.order_number}\n"
                     f"Total Amount: ₦{order.total_amount:,.2f}\n"
                     f"Delivery Date: {order.delivery.delivery_date}\n\n"
-                    f"We will notify you once your order is confirmed.\n\n"
-                    f"Thank you for choosing us!"
+                    f"{'Please login to complete your payment.' if requires_auth else 'Your order is being processed.'}\n\n"
+                    f"Thank you for choosing M&C Cakes!"
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[order.customer_email],
@@ -142,13 +254,21 @@ class CreateOrderView(APIView):
             pass
 
         response_serializer = OrderDetailSerializer(order)
+        
         return Response({
-            'message': 'Order created successfully.',
-            'order': response_serializer.data
+            'message': message,
+            'order': response_serializer.data,
+            'requires_authentication': requires_auth,
+            'order_id': order.id,
+            'order_number': order.order_number,
         }, status=status.HTTP_201_CREATED)
 
 
 class CancelOrderView(APIView):
+    """
+    PATCH /api/orders/<id>/cancel/
+    Cancel an order.
+    """
     permission_classes = [IsOrderOwnerOrAdmin]
 
     @swagger_auto_schema(
@@ -183,7 +303,95 @@ class CancelOrderView(APIView):
         })
 
 
+class CheckoutOrderView(APIView):
+    """
+    GET /api/orders/<id>/checkout/
+    Check if user can proceed to payment.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, id):
+        order = get_object_or_404(Order, id=id)
+        
+        # ✅ SAFELY check if user is authenticated - NO session access
+        is_authenticated = False
+        user = None
+        
+        try:
+            if hasattr(request, 'user') and request.user:
+                if request.user.is_authenticated:
+                    is_authenticated = True
+                    user = request.user
+        except Exception:
+            is_authenticated = False
+            user = None
+        
+        if is_authenticated and user:
+            # If this is a guest order (no user associated), associate it
+            if not order.user:
+                order.user = user
+                order.save()
+                OrderHistory.objects.create(
+                    order=order,
+                    action='status_changed',
+                    description=f"Guest order associated with user {user.email}",
+                    changed_by=user,
+                    old_value='guest',
+                    new_value='authenticated'
+                )
+            
+            # Check if user owns the order
+            if order.user != user and not user.is_staff:
+                return Response({
+                    'error': 'You do not have permission to view this order.'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Check if order can be paid
+            if order.status == 'cancelled':
+                return Response({
+                    'error': 'This order has been cancelled.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if order.payment_status == 'paid':
+                return Response({
+                    'error': 'This order has already been paid.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get delivery info if it exists
+            delivery_info = None
+            if hasattr(order, 'delivery') and order.delivery:
+                delivery_info = {
+                    'delivery_date': order.delivery.delivery_date,
+                    'address': order.delivery.address,
+                    'city': order.delivery.city,
+                }
+            
+            return Response({
+                'message': 'Ready for payment.',
+                'can_proceed_to_payment': True,
+                'order_id': order.id,
+                'order_number': order.order_number,
+                'amount': str(order.total_amount),
+                'customer_name': order.customer_name,
+                'customer_email': order.customer_email,
+                'delivery': delivery_info,
+            }, status=status.HTTP_200_OK)
+        
+        else:
+            # ✅ Guest user - NO session access
+            return Response({
+                'message': 'Authentication required to proceed with payment.',
+                'requires_authentication': True,
+                'order_id': order.id,
+                'order_number': order.order_number,
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+
 class TrackOrderView(APIView):
+    """
+    GET /api/orders/<id>/track/
+    Track an order - public access.
+    """
     permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
@@ -252,8 +460,6 @@ class TrackOrderByNumberView(APIView):
             })
 
         return Response(data)
-    
-
 
 
 # ============================================================================
@@ -261,6 +467,10 @@ class TrackOrderByNumberView(APIView):
 # ============================================================================
 
 class AdminOrderUpdateView(APIView):
+    """
+    PUT /api/admin/orders/<id>/status/
+    Update order status - Admin only.
+    """
     permission_classes = [permissions.IsAdminUser]
 
     @swagger_auto_schema(
@@ -311,6 +521,10 @@ class AdminOrderUpdateView(APIView):
 
 
 class AdminPaymentUpdateView(APIView):
+    """
+    PUT /api/admin/orders/<id>/payment/
+    Update payment status - Admin only.
+    """
     permission_classes = [permissions.IsAdminUser]
 
     @swagger_auto_schema(
@@ -335,11 +549,12 @@ class AdminPaymentUpdateView(APIView):
         old_status = order.payment_status
         order.payment_status = data['payment_status']
 
+        # Update Paystack fields
         if data.get('transaction_id'):
-            order.flutterwave_transaction_id = data['transaction_id']
+            order.paystack_transaction_id = data['transaction_id']
 
-        if data.get('flutterwave_reference'):
-            order.flutterwave_reference = data['flutterwave_reference']
+        if data.get('paystack_reference'):
+            order.paystack_reference = data['paystack_reference']
 
         if data['payment_status'] == 'paid' and not order.payment_date:
             order.payment_date = now()
@@ -362,6 +577,10 @@ class AdminPaymentUpdateView(APIView):
 
 
 class AdminOrderStatsView(APIView):
+    """
+    GET /api/admin/orders/stats/
+    Order statistics - Admin only.
+    """
     permission_classes = [permissions.IsAdminUser]
 
     @swagger_auto_schema(

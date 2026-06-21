@@ -7,14 +7,14 @@ from django.conf import settings
 
 STATUS_CHOICES = [
     ('pending', 'Pending'),
-    ('completed', 'Completed'),  # Renamed from 'success' to match orders app
+    ('completed', 'Completed'),
     ('failed', 'Failed'),
     ('refunded', 'Refunded'),
 ]
 
 
 class Transaction(models.Model):
-    # Renamed from 'ref' to 'reference' for consistency across the codebase
+    # Unique payment reference (UUID)
     reference = models.CharField(
         max_length=255,
         unique=True,
@@ -22,12 +22,19 @@ class Transaction(models.Model):
         help_text="Unique payment reference (UUID)"
     )
 
-    # Flutterwave transaction ID returned after payment verification
-    flutterwave_transaction_id = models.CharField(
+    # Paystack transaction ID returned after payment verification
+    paystack_transaction_id = models.CharField(
         max_length=100,
         blank=True,
         db_index=True,
-        help_text="Flutterwave transaction ID from verification response"
+        help_text="Paystack transaction ID from verification response"
+    )
+
+    # Paystack access code (needed for inline payment if we switch to modal later)
+    paystack_access_code = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Paystack access code from payment initialization"
     )
 
     # Cart changed from CASCADE to SET_NULL — payment records must never be deleted
@@ -74,6 +81,13 @@ class Transaction(models.Model):
         help_text="Current transaction status"
     )
 
+    # Store complete Paystack API response for debugging
+    gateway_response = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Complete Paystack API response"
+    )
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -93,6 +107,7 @@ class Transaction(models.Model):
         indexes = [
             models.Index(fields=['reference']),
             models.Index(fields=['status']),
+            models.Index(fields=['paystack_transaction_id']),
             models.Index(fields=['user', '-created_at']),
         ]
 
