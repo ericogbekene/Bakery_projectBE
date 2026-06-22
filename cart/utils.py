@@ -15,12 +15,6 @@ def get_or_create_cart(request):
 
     cart = None
 
-    print("=" * 50)
-    print("ADD TO CART")
-    print("SESSION KEY:", request.session.session_key)
-    print("SESSION CART ID:", request.session.get('cart_id'))
-    print("=" * 50)
-
     if request.user.is_authenticated:
         cart = Cart.objects.filter(user=request.user, is_active=True).first()
 
@@ -45,14 +39,11 @@ def get_or_create_cart(request):
                 is_active=True
             ).first()
 
-        # ✅ FIX: Fall back to looking up by session_key alone, in case
+        # Fall back to looking up by session_key alone, in case
         # 'cart_id' wasn't present in THIS request's session dict yet
         # (e.g. a concurrent sibling request created the cart a moment
         # ago and committed it to the DB, but this request's in-memory
-        # session object was loaded before that write happened). Without
-        # this fallback, a second concurrent request would blindly try to
-        # create a *second* cart/session row for the same browser tab,
-        # which is what was driving the session race.
+        # session object was loaded before that write happened).
         if not cart and request.session.session_key:
             cart = Cart.objects.filter(
                 session_key=request.session.session_key,
@@ -78,22 +69,6 @@ def create_new_cart(request):
         cart.save()
         return cart
 
-    # ✅ FIX: Don't manually force a session row write here on its own.
-    # Forcing request.session.create() (or even a bare .save()) mid-view,
-    # with no further guard, let two near-simultaneous guest requests
-    # (e.g. the cart-count poll firing alongside an order POST on first
-    # page load, before any sessionid cookie exists) each generate their
-    # own session_key and each try to persist/overwrite the same session
-    # row, producing "Forced update did not affect any rows" ->
-    # SessionInterrupted.
-    #
-    # We still need a session_key to associate the cart row with before
-    # the response is returned, so we save once here — but we now follow
-    # it with a guarded get_or_create against the DB (below), so even if
-    # two requests still race and end up with two different session keys
-    # momentarily, we don't blow up: we simply get/create a cart per key
-    # and the harmless duplicate gets reconciled on the next request via
-    # the session_key fallback lookup in get_or_create_cart above.
     if not request.session.session_key:
         request.session.save()
 
@@ -106,9 +81,6 @@ def create_new_cart(request):
                 is_active=True,
             )
     except IntegrityError:
-        # Last-resort race: another request committed a cart for this
-        # exact session_key between our check and insert. Re-fetch it
-        # instead of erroring out.
         cart = Cart.objects.filter(
             session_key=session_key,
             is_active=True
@@ -122,9 +94,6 @@ def merge_carts(user_cart, session_cart, user):
     """
     Merge guest session cart into user cart when user logs in.
 
-    Fixed: now accepts 'user' as an explicit parameter so the guest cart
-    can be correctly assigned to the user when no user cart exists yet.
-
     Args:
         user_cart: Cart instance for user (can be None)
         session_cart: Guest cart instance from session
@@ -137,14 +106,13 @@ def merge_carts(user_cart, session_cart, user):
 
     # If no user cart exists, convert the session cart into the user's cart
     if not user_cart:
-        session_cart.user = user  # Fixed: was incorrectly assigning None
+        session_cart.user = user
         session_cart.session_key = None
         session_cart.save()
         return session_cart
 
     # Merge items from session cart into user cart
     for session_item in session_cart.items.all():
-        # Check if same product with same customization already exists in user cart
         existing_item = user_cart.items.filter(
             product=session_item.product,
             flavour_1=session_item.flavour_1,
@@ -161,12 +129,10 @@ def merge_carts(user_cart, session_cart, user):
         ).first()
 
         if existing_item:
-            # Add quantities together
             existing_item.quantity += session_item.quantity
             existing_item.save()
             session_item.delete()
         else:
-            # Move item to user cart
             session_item.cart = user_cart
             session_item.save()
 
