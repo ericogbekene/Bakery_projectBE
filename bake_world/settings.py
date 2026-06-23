@@ -15,39 +15,32 @@ from decouple import Csv, config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ---------------------------------------------------------------------------
-# Core settings — all driven by .env via python-decouple
+# Core settings
 # ---------------------------------------------------------------------------
 SECRET_KEY = config("DJANGO_SECRET_KEY", default="replace-this-in-production!")
 DEBUG = config("DEBUG", default=True, cast=bool)
 IS_PRODUCTION = config("IS_PRODUCTION", default=False, cast=bool)
 
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
-ALLOWED_HOSTS = list(ALLOWED_HOSTS) + [
-    "muster-shale-trance.ngrok-free.dev",
-    "*.ngrok-free.dev",  # Allow all ngrok subdomains
-]
+ALLOWED_HOSTS = list(config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv()))
 
-if not IS_PRODUCTION:
-    ALLOWED_HOSTS.extend([
-        "muster-shale-trance.ngrok-free.dev",
-        "*.ngrok-free.dev",  # Allow all ngrok subdomains
-        "*.ngrok.io",  # Allow old ngrok domains
-    ])
+if IS_PRODUCTION:
+    ALLOWED_HOSTS += [
+        "api.mandccakes.com",
+        "mandccakes.com",
+        "www.mandccakes.com",
+    ]
 
 # ---------------------------------------------------------------------------
 # CSRF
 # ---------------------------------------------------------------------------
 CSRF_TRUSTED_ORIGINS = [
-    "https://micro-foodbank-backend-44tkf.kinsta.app",
-    "https://baker-production.up.railway.app",
-    "https://bakery-projectbe-6q46.onrender.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "http://localhost:5173",
-    "https://muster-shale-trance.ngrok-free.dev",
-    "https://*.ngrok-free.dev",
+    "https://mandccakes.com",
+    "https://www.mandccakes.com",
+    "https://api.mandccakes.com",
 ]
 
 CSRF_COOKIE_HTTPONLY = False
@@ -56,24 +49,18 @@ CSRF_USE_SESSIONS = False
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://138.68.23.253",
-    "http://localhost:5173",
-    "https://muster-shale-trance.ngrok-free.dev",  # ✅ Add ngrok URL
-    "https://*.ngrok-free.dev",  # ✅ Allow all ngrok
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://mandccakes.com",
+    "https://www.mandccakes.com",
+    "https://api.mandccakes.com",
 ]
-
-if IS_PRODUCTION:
-    CORS_ALLOWED_ORIGINS.extend([
-        f"https://{host}" for host in ALLOWED_HOSTS if host.strip()
-    ])
 
 CORS_ALLOW_HEADERS = [
     "accept",
@@ -332,30 +319,14 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 # ---------------------------------------------------------------------------
 # Paystack
 # ---------------------------------------------------------------------------
-# settings.py - Paystack section
-
-# ---------------------------------------------------------------------------
-# Paystack
-# ---------------------------------------------------------------------------
 PAYSTACK_SECRET_KEY = config("PAYSTACK_SECRET_KEY", default="")
 PAYSTACK_PUBLIC_KEY = config("PAYSTACK_PUBLIC_KEY", default="")
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
-
-# ✅ Use FRONTEND_URL for callback
 PAYSTACK_CALLBACK_URL = config(
-    "PAYSTACK_CALLBACK_URL", 
-    default=f"{FRONTEND_URL}/payment/verify"
+    "PAYSTACK_CALLBACK_URL",
+    default=f"{FRONTEND_URL}/payment/callback"
 )
 
-
-# ✅ Debug: Print configuration
-print("=" * 60)
-print("🔐 PAYSTACK CONFIGURATION")
-print(f"PAYSTACK_SECRET_KEY set: {'Yes' if PAYSTACK_SECRET_KEY else 'No'}")
-print(f"PAYSTACK_PUBLIC_KEY set: {'Yes' if PAYSTACK_PUBLIC_KEY else 'No'}")
-print(f"FRONTEND_URL: {FRONTEND_URL}")
-print(f"PAYSTACK_CALLBACK_URL: {PAYSTACK_CALLBACK_URL}")
-print("=" * 60)
 # ---------------------------------------------------------------------------
 # Miscellaneous
 # ---------------------------------------------------------------------------

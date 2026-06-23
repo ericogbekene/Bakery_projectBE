@@ -7,19 +7,20 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from decimal import Decimal
 
-from cart.models import Cart, CartItem, DeliveryInfo
+from cart.models import Cart, CartItem, DeliveryInfo, CartItemAddon, CakeCustomizationOption
 from products.models import Product
 from cart.utils import (
     get_or_create_cart,
+    get_cart_if_exists,
     get_cart_item_count,
     clear_cart,
+    merge_carts,
 )
 from .serializers import (
     CartSerializer, CartItemSerializer, AddToCartSerializer,
     UpdateCartItemSerializer, PriceCalculationSerializer,
     DeliveryInfoSerializer, GuestCartMergeSerializer
 )
-from cart.models import CartItemAddon, CakeCustomizationOption
 from delivery.models import DeliveryService
 
 
@@ -37,21 +38,16 @@ class CartDetailView(APIView):
     @swagger_auto_schema(
         operation_summary="Get Cart",
         operation_description="Get the current cart with all items, subtotal, delivery cost and grand total.",
-        responses={
-            200: openapi.Response(description="Cart retrieved successfully."),
-        }
+        responses={200: openapi.Response(description="Cart retrieved successfully.")}
     )
     def get(self, request):
         cart = get_or_create_cart(request)
-        serializer = CartSerializer(cart)
-        return Response(serializer.data)
+        return Response(CartSerializer(cart).data)
 
     @swagger_auto_schema(
         operation_summary="Clear Cart",
         operation_description="Remove all items from the current cart.",
-        responses={
-            200: openapi.Response(description="Cart cleared successfully."),
-        }
+        responses={200: openapi.Response(description="Cart cleared successfully.")}
     )
     def delete(self, request):
         cart = clear_cart(request)
@@ -83,10 +79,8 @@ class AddToCartView(APIView):
 
         data = serializer.validated_data
         product = serializer.context['product']
-
         cart = get_or_create_cart(request)
 
-        # Check if identical item already exists in cart
         existing_item = CartItem.objects.filter(
             cart=cart,
             product=product,
@@ -107,13 +101,10 @@ class AddToCartView(APIView):
             existing_item.quantity += data.get('quantity', 1)
             existing_item.save()
 
-            # Update dynamic addons if provided
-            
             for addon_input in data.get('addons', []):
                 try:
                     addon = CakeCustomizationOption.objects.get(
-                        id=addon_input['addon_id'],
-                        is_active=True
+                        id=addon_input['addon_id'], is_active=True
                     )
                     addon_obj, created = CartItemAddon.objects.get_or_create(
                         cart_item=existing_item,
@@ -125,15 +116,14 @@ class AddToCartView(APIView):
                         addon_obj.save()
                 except CakeCustomizationOption.DoesNotExist:
                     pass
-                
+
             return Response({
                 'message': f"Updated quantity of {product.name} in cart.",
                 'cart_item': CartItemSerializer(existing_item).data,
                 'cart_item_count': get_cart_item_count(request)
-            }, status=status.HTTP_200_OK)  # Fixed: 200 on update, not 201
+            }, status=status.HTTP_200_OK)
 
         else:
-            # Create new cart item
             cart_item = CartItem(
                 cart=cart,
                 product=product,
@@ -153,13 +143,10 @@ class AddToCartView(APIView):
             )
             cart_item.save()
 
-            # Save dynamic addons
-            
             for addon_input in data.get('addons', []):
                 try:
                     addon = CakeCustomizationOption.objects.get(
-                        id=addon_input['addon_id'],
-                        is_active=True
+                        id=addon_input['addon_id'], is_active=True
                     )
                     CartItemAddon.objects.create(
                         cart_item=cart_item,
@@ -169,7 +156,6 @@ class AddToCartView(APIView):
                 except CakeCustomizationOption.DoesNotExist:
                     pass
 
-            # Recalculate customization_cost now that dynamic addons are saved
             cart_item.customization_cost = cart_item.calculate_addons_cost()
             cart_item.save()
 
@@ -178,8 +164,8 @@ class AddToCartView(APIView):
                 'cart_item': CartItemSerializer(cart_item).data,
                 'cart_item_count': get_cart_item_count(request)
             }, status=status.HTTP_201_CREATED)
-        
-        
+
+
 class CartItemDetailView(APIView):
     """
     PATCH /api/cart/items/<id>/ - Update cart item quantity
@@ -201,9 +187,8 @@ class CartItemDetailView(APIView):
             404: openapi.Response(description="Cart item not found."),
         }
     )
-    def patch(self, request, item_id):  # Fixed: PUT -> PATCH for partial updates
+    def patch(self, request, item_id):
         cart_item = self.get_object(request, item_id)
-
         serializer = UpdateCartItemSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -225,7 +210,6 @@ class CartItemDetailView(APIView):
             cart_item.quantity -= quantity
 
         cart_item.save()
-
         return Response({
             'message': 'Cart item updated successfully.',
             'cart_item': CartItemSerializer(cart_item).data,
@@ -244,7 +228,6 @@ class CartItemDetailView(APIView):
         cart_item = self.get_object(request, item_id)
         product_name = cart_item.product.name
         cart_item.delete()
-
         return Response({
             'message': f'{product_name} removed from cart.',
             'cart_item_count': get_cart_item_count(request)
@@ -273,7 +256,6 @@ class CalculatePriceView(APIView):
         data = serializer.validated_data
         product = serializer.context['product']
 
-        # Create a temporary (unsaved) cart item purely for calculation
         temp_item = CartItem(
             product=product,
             base_price=product.price,
@@ -315,9 +297,7 @@ class CartItemCountView(APIView):
     @swagger_auto_schema(
         operation_summary="Get Cart Item Count",
         operation_description="Get the total number of items (sum of quantities) in the current cart.",
-        responses={
-            200: openapi.Response(description="Item count returned."),
-        }
+        responses={200: openapi.Response(description="Item count returned.")}
     )
     def get(self, request):
         count = get_cart_item_count(request)
@@ -333,14 +313,21 @@ class CartSummaryView(APIView):
     @swagger_auto_schema(
         operation_summary="Get Cart Summary",
         operation_description="Get a full cart summary including all items, subtotal, delivery cost and grand total.",
-        responses={
-            200: openapi.Response(description="Cart summary returned."),
-        }
+        responses={200: openapi.Response(description="Cart summary returned.")}
     )
     def get(self, request):
-        cart = get_or_create_cart(request)
-        items_data = []
+        cart = get_cart_if_exists(request)
+        if not cart:
+            return Response({
+                'cart_id': None,
+                'item_count': 0,
+                'subtotal': '0.00',
+                'delivery_cost': '0.00',
+                'grand_total': '0.00',
+                'items': []
+            })
 
+        items_data = []
         for item in cart.items.all():
             items_data.append({
                 'id': item.id,
@@ -383,11 +370,9 @@ class DeliveryInfoView(APIView):
     )
     def get(self, request):
         cart = get_or_create_cart(request)
-
         try:
             delivery_info = cart.delivery_info
-            serializer = DeliveryInfoSerializer(delivery_info)
-            return Response(serializer.data)
+            return Response(DeliveryInfoSerializer(delivery_info).data)
         except DeliveryInfo.DoesNotExist:
             return Response(
                 {'message': 'No delivery information found.'},
@@ -396,7 +381,7 @@ class DeliveryInfoView(APIView):
 
     @swagger_auto_schema(
         operation_summary="Save Delivery Info",
-        operation_description="Add or update delivery information for the current cart. Automatically calculates delivery fee based on city.",
+        operation_description="Add or update delivery information for the current cart.",
         request_body=DeliveryInfoSerializer,
         responses={
             200: openapi.Response(description="Delivery information saved."),
@@ -405,19 +390,12 @@ class DeliveryInfoView(APIView):
     )
     def post(self, request):
         cart = get_or_create_cart(request)
-
         delivery_info, created = DeliveryInfo.objects.get_or_create(cart=cart)
 
-        serializer = DeliveryInfoSerializer(
-            delivery_info,
-            data=request.data,
-            partial=True
-        )
+        serializer = DeliveryInfoSerializer(delivery_info, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        # Calculate delivery fee — wrapped in try/except in case delivery app
-        # has not been set up or DeliveryService method signature changes
         if delivery_info.city:
             try:
                 result = DeliveryService.calculate_delivery_fee(
@@ -428,7 +406,6 @@ class DeliveryInfoView(APIView):
                     delivery_info.calculated_fee = result['fee']
                     delivery_info.save()
             except Exception:
-                # Fee calculation failure should not block saving delivery info
                 pass
 
         return Response({
@@ -444,7 +421,6 @@ class DeliveryInfoView(APIView):
 class MergeGuestCartView(APIView):
     """
     POST /api/cart/merge/ - Merge guest cart with user cart on login
-    Requires authentication.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -481,7 +457,6 @@ class MergeGuestCartView(APIView):
             defaults={'session_key': None}
         )
 
-        from cart.utils import merge_carts
         merged_cart = merge_carts(user_cart, guest_cart, request.user)
 
         return Response({
