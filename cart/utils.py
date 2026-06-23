@@ -6,7 +6,6 @@ from django.db.utils import IntegrityError
 def get_or_create_cart(request):
     """
     Get existing cart or create new one for user/guest.
-
     For authenticated users: returns their active cart.
     For guests: returns cart linked to session key.
     Handles merging of guest cart to user cart on login.
@@ -30,7 +29,6 @@ def get_or_create_cart(request):
                 request.session.pop('cart_id', None)
 
     else:
-        # For guests, look up cart by session
         cart_id = request.session.get('cart_id')
         if cart_id:
             cart = Cart.objects.filter(
@@ -39,23 +37,49 @@ def get_or_create_cart(request):
                 is_active=True
             ).first()
 
-        # Fall back to looking up by session_key alone, in case
-        # 'cart_id' wasn't present in THIS request's session dict yet
-        # (e.g. a concurrent sibling request created the cart a moment
-        # ago and committed it to the DB, but this request's in-memory
-        # session object was loaded before that write happened).
+        # Fall back to session_key lookup in case of concurrent requests
         if not cart and request.session.session_key:
             cart = Cart.objects.filter(
                 session_key=request.session.session_key,
                 is_active=True
             ).order_by('-id').first()
 
-    # Create new cart if none exists
     if not cart:
         cart = create_new_cart(request)
         request.session['cart_id'] = cart.id
 
     return cart
+
+
+def get_cart_if_exists(request):
+    """
+    Look up the current cart WITHOUT creating one if it doesn't exist.
+    Used by count/summary endpoints to avoid ghost cart creation.
+    """
+    from .models import Cart
+
+    if request.user.is_authenticated:
+        return Cart.objects.filter(user=request.user, is_active=True).first()
+
+    # Guest — try cart_id in session first
+    cart_id = request.session.get('cart_id')
+    if cart_id and request.session.session_key:
+        cart = Cart.objects.filter(
+            id=cart_id,
+            session_key=request.session.session_key,
+            is_active=True
+        ).first()
+        if cart:
+            return cart
+
+    # Fall back to session_key lookup
+    if request.session.session_key:
+        return Cart.objects.filter(
+            session_key=request.session.session_key,
+            is_active=True
+        ).order_by('-id').first()
+
+    return None
 
 
 def create_new_cart(request):
@@ -93,25 +117,15 @@ def create_new_cart(request):
 def merge_carts(user_cart, session_cart, user):
     """
     Merge guest session cart into user cart when user logs in.
-
-    Args:
-        user_cart: Cart instance for user (can be None)
-        session_cart: Guest cart instance from session
-        user: The authenticated user to assign the cart to
-
-    Returns:
-        Cart instance (either merged or converted)
     """
     from .models import CartItem
 
-    # If no user cart exists, convert the session cart into the user's cart
     if not user_cart:
         session_cart.user = user
         session_cart.session_key = None
         session_cart.save()
         return session_cart
 
-    # Merge items from session cart into user cart
     for session_item in session_cart.items.all():
         existing_item = user_cart.items.filter(
             product=session_item.product,
@@ -136,7 +150,6 @@ def merge_carts(user_cart, session_cart, user):
             session_item.cart = user_cart
             session_item.save()
 
-    # Deactivate the now-empty session cart
     session_cart.is_active = False
     session_cart.save()
 
@@ -145,10 +158,11 @@ def merge_carts(user_cart, session_cart, user):
 
 def get_cart_item_count(request):
     """
-    Get total number of items in cart (sum of all quantities).
-    Uses aggregate for efficiency — avoids N+1 query.
+    Get total number of items in cart without creating one if it doesn't exist.
     """
-    cart = get_or_create_cart(request)
+    cart = get_cart_if_exists(request)
+    if not cart:
+        return 0
     result = cart.items.aggregate(total=Sum('quantity'))
     return result['total'] or 0
 
@@ -156,7 +170,6 @@ def get_cart_item_count(request):
 def clear_cart(request):
     """
     Clear all items from cart.
-    Returns the now-empty cart instance.
     """
     cart = get_or_create_cart(request)
     cart.items.all().delete()
