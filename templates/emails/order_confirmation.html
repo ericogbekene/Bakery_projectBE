@@ -1,0 +1,88 @@
+{% extends "emails/base_email.html" %}
+{% block content %}
+  <h2>Order Confirmed! 🎂</h2>
+  <p>Hi <strong>{{ order.customer_name }}</strong>,</p>
+  <p>Thank you for your order! We've received it and will begin preparing your baked goods soon. Here's a summary of what you ordered.</p>
+
+  <!-- Order Meta -->
+  <div class="info-box">
+    <p>
+      📦 <strong>Order Number:</strong> {{ order.order_number }}<br/>
+      📅 <strong>Date:</strong> {{ order.created_at|date:"F j, Y" }}<br/>
+      💳 <strong>Payment:</strong>
+        {% if order.payment_status == 'paid' %}
+          ✅ Paid via Paystack
+        {% else %}
+          ⏳ Awaiting Payment
+        {% endif %}
+    </p>
+  </div>
+
+  <!-- Order Items -->
+  <h3 style="color: #7b3f00; margin-top: 28px;">🛒 Your Items</h3>
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; font-size: 14px;">
+    <thead>
+      <tr style="background-color: #7b3f00; color: #fff8f0;">
+        <th style="padding: 10px 12px; text-align: left;">Item</th>
+        <th style="padding: 10px 12px; text-align: center;">Qty</th>
+        <th style="padding: 10px 12px; text-align: right;">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in order.items.all %}
+      <tr style="border-bottom: 1px solid #f0e6d8;">
+        <td style="padding: 12px;">
+          <strong>{{ item.product.name }}</strong>
+          {% if item.size %}<br/><span style="color: #888; font-size: 12px;">Size: {{ item.size }}"</span>{% endif %}
+          {% if item.flavour_1 %}<br/><span style="color: #888; font-size: 12px;">Flavour: {{ item.flavour_1 }}{% if item.flavour_2 %} & {{ item.flavour_2 }}{% endif %}</span>{% endif %}
+          {% if item.colours %}<br/><span style="color: #888; font-size: 12px;">Colours: {{ item.colours }}</span>{% endif %}
+          {% with addons=item.get_addons_summary %}
+            {% if addons != "No add-ons" %}<br/><span style="color: #888; font-size: 12px;">Add-ons: {{ addons }}</span>{% endif %}
+          {% endwith %}
+          {% if item.additional_notes %}<br/><span style="color: #888; font-size: 12px; font-style: italic;">Note: {{ item.additional_notes }}</span>{% endif %}
+        </td>
+        <td style="padding: 12px; text-align: center;">{{ item.quantity }}</td>
+        <td style="padding: 12px; text-align: right;">₦{{ item.item_total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2" style="padding: 10px 12px; text-align: right; color: #555;">Subtotal:</td>
+        <td style="padding: 10px 12px; text-align: right;">₦{{ order.subtotal }}</td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding: 4px 12px; text-align: right; color: #555;">Delivery Fee:</td>
+        <td style="padding: 4px 12px; text-align: right;">₦{{ order.delivery_fee }}</td>
+      </tr>
+      <tr style="background-color: #fdf6ef;">
+        <td colspan="2" style="padding: 12px; text-align: right; font-weight: bold; color: #7b3f00;">Total:</td>
+        <td style="padding: 12px; text-align: right; font-weight: bold; color: #7b3f00;">₦{{ order.total_amount }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- Delivery Info -->
+  {% if order.delivery %}
+  <h3 style="color: #7b3f00; margin-top: 28px;">🚚 Delivery Details</h3>
+  <div class="info-box">
+    <p>
+      📍 <strong>Address:</strong> {{ order.delivery.address }}, {{ order.delivery.city }}{% if order.delivery.state %}, {{ order.delivery.state }}{% endif %}<br/>
+      📅 <strong>Delivery Date:</strong> {{ order.delivery.delivery_date|date:"F j, Y" }}<br/>
+      {% if order.delivery.delivery_time_slot %}
+      ⏰ <strong>Time Slot:</strong> {{ order.delivery.delivery_time_slot }}<br/>
+      {% endif %}
+      {% if order.delivery.special_instructions %}
+      📝 <strong>Instructions:</strong> {{ order.delivery.special_instructions }}
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+  <div style="text-align: center; margin-top: 28px;">
+    <a href="{{ frontend_url }}/orders/{{ order.order_number }}" class="btn">📦 Track My Order</a>
+  </div>
+
+  <hr class="divider" />
+  <p style="font-size: 13px; color: #888;">Questions about your order? Reply to this email or contact us through our website.</p>
+{% endblock %}

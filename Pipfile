@@ -70,6 +70,7 @@ validators = "*"
 vine = "*"
 wcwidth = "*"
 whitenoise = "*"
+django-anymail = {extras = ["sendinblue"], version = "*"}
 
 [dev-packages]
 

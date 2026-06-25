@@ -1,0 +1,44 @@
+{% extends "emails/base_email.html" %}
+{% block content %}
+  <h2>Order Update 📬</h2>
+  <p>Hi <strong>{{ order.customer_name }}</strong>,</p>
+  <p>Your order <strong>#{{ order.order_number }}</strong> has been updated.</p>
+
+  <!-- Status Badge -->
+  <div style="text-align: center; margin: 28px 0;">
+    <span style="
+      display: inline-block;
+      padding: 12px 28px;
+      background-color: {{ status_color }};
+      color: #fff;
+      border-radius: 50px;
+      font-size: 16px;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+      letter-spacing: 0.5px;
+    ">
+      {{ status_icon }} {{ status_label }}
+    </span>
+  </div>
+
+  <!-- Status Description -->
+  <div class="info-box">
+    <p>{{ status_message }}</p>
+  </div>
+
+  <!-- Order Summary -->
+  <div style="margin-top: 20px;">
+    <p style="font-size: 14px; color: #555;">
+      📦 <strong>Order:</strong> #{{ order.order_number }}<br/>
+      📅 <strong>Placed:</strong> {{ order.created_at|date:"F j, Y" }}<br/>
+      💰 <strong>Total:</strong> ₦{{ order.total_amount }}
+    </p>
+  </div>
+
+  <div style="text-align: center; margin-top: 24px;">
+    <a href="{{ frontend_url }}/orders/{{ order.order_number }}" class="btn">📦 View Order</a>
+  </div>
+
+  <hr class="divider" />
+  <p style="font-size: 13px; color: #888;">You're receiving this because your order status changed. If you have questions, please contact us.</p>
+{% endblock %}
