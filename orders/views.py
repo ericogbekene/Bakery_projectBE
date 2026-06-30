@@ -94,10 +94,7 @@ class CreateOrderView(APIView):
             400: openapi.Response(description="Validation error or empty cart."),
         }
     )
-    @transaction.atomic
     def post(self, request):
-       
-
         from cart.utils import get_or_create_cart
         cart = get_or_create_cart(request)
 
@@ -109,12 +106,10 @@ class CreateOrderView(APIView):
                 ).exclude(id=cart.id).first()
 
                 if user_cart and user_cart.items.count() > 0:
-                    print(f"✅ Found another active cart with items: {user_cart.id}")
                     cart = user_cart
                 else:
                     any_cart = Cart.objects.filter(user=request.user).order_by('-created_at').first()
                     if any_cart and any_cart.items.count() > 0:
-                        print(f"✅ Found cart with items (reactivating): {any_cart.id}")
                         any_cart.is_active = True
                         any_cart.save()
                         cart = any_cart
@@ -123,17 +118,13 @@ class CreateOrderView(APIView):
                 session_cart_id = request.session.get('cart_id')
                 session_cart = Cart.objects.filter(id=session_cart_id, is_active=True).first()
                 if session_cart and session_cart.items.count() > 0:
-                    print(f"✅ Found cart from session: {session_cart.id}")
                     cart = session_cart
 
         if cart.items.count() == 0:
-            print("❌ Cart is empty after all attempts!")
             return Response(
                 {'error': 'Cart is empty. Please add items before ordering.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        print(f"✅ Final cart: {cart.id} with {cart.items.count()} items")
 
         serializer = CreateOrderSerializer(
             data=request.data,
@@ -155,64 +146,64 @@ class CreateOrderView(APIView):
             'delivery_fee': cart.delivery_cost or Decimal('0.00'),
         }
 
-        from orders.models import create_order_from_cart
-        order = create_order_from_cart(
-            cart=cart,
-            customer_data={
-                'name': data['customer_name'],
-                'email': data['customer_email'],
-                'phone': data['customer_phone'],
-            },
-            delivery_data=delivery_data,
-        )
-
+        # ── All DB work inside a single atomic block ──────────────────────
         is_authenticated = False
         user = None
 
         try:
-            if hasattr(request, 'user') and request.user:
-                if request.user.is_authenticated:
-                    is_authenticated = True
-                    user = request.user
+            if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+                is_authenticated = True
+                user = request.user
         except Exception:
             pass
 
-        if is_authenticated and user:
-            order.user = user
-            order.status = 'pending'
-            order.save()
-
-            OrderHistory.objects.create(
-                order=order,
-                action='created',
-                description=f"Order created by {user.email}",
-                changed_by=user,
-                old_value='',
-                new_value='pending'
+        with transaction.atomic():
+            from orders.models import create_order_from_cart
+            order = create_order_from_cart(
+                cart=cart,
+                customer_data={
+                    'name': data['customer_name'],
+                    'email': data['customer_email'],
+                    'phone': data['customer_phone'],
+                },
+                delivery_data=delivery_data,
             )
-            requires_auth = False
-            message = "Order created successfully. Proceed to payment."
-        else:
-            order.status = 'pending'
-            order.save()
 
-            OrderHistory.objects.create(
-                order=order,
-                action='created',
-                description="Guest order created",
-                changed_by=None,
-                old_value='',
-                new_value='pending'
-            )
-            requires_auth = True
-            message = "Order created successfully. Please login to complete payment."
+            if is_authenticated and user:
+                order.user = user
+                order.status = 'pending'
+                order.save()
 
-        # ✅ Send branded HTML order confirmation email
+                OrderHistory.objects.create(
+                    order=order,
+                    action='created',
+                    description=f"Order created by {user.email}",
+                    changed_by=user,
+                    old_value='',
+                    new_value='pending'
+                )
+                requires_auth = False
+                message = "Order created successfully. Proceed to payment."
+            else:
+                order.status = 'pending'
+                order.save()
+
+                OrderHistory.objects.create(
+                    order=order,
+                    action='created',
+                    description="Guest order created",
+                    changed_by=None,
+                    old_value='',
+                    new_value='pending'
+                )
+                requires_auth = True
+                message = "Order created successfully. Please login to complete payment."
+
+        # ── Email is outside the transaction — won't block DB connection ──
         try:
             send_order_confirmation(order)
-        except Exception as e:
-            # Don't break order creation if email fails
-            print(f"⚠️ Order confirmation email failed: {e}")
+        except Exception:
+            pass
 
         response_serializer = OrderDetailSerializer(order)
 
@@ -258,11 +249,10 @@ class CancelOrderView(APIView):
         reason = serializer.validated_data.get('reason', '')
         order.update_status('cancelled', request.user if request.user.is_authenticated else None, reason)
 
-        # ✅ Send branded cancellation email (handled inside send_order_status_update)
         try:
             send_order_status_update(order)
-        except Exception as e:
-            print(f"⚠️ Cancellation email failed: {e}")
+        except Exception:
+            pass
 
         return Response({
             'message': 'Order cancelled successfully.',
@@ -284,13 +274,11 @@ class CheckoutOrderView(APIView):
         user = None
 
         try:
-            if hasattr(request, 'user') and request.user:
-                if request.user.is_authenticated:
-                    is_authenticated = True
-                    user = request.user
+            if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+                is_authenticated = True
+                user = request.user
         except Exception:
-            is_authenticated = False
-            user = None
+            pass
 
         if is_authenticated and user:
             if not order.user:
@@ -454,12 +442,11 @@ class AdminOrderUpdateView(APIView):
 
         order.update_status(new_status, request.user, reason)
 
-        # ✅ Send branded HTML status update email (if notify flag is true)
         if notify:
             try:
                 send_order_status_update(order)
-            except Exception as e:
-                print(f"⚠️ Status update email failed: {e}")
+            except Exception:
+                pass
 
         return Response({
             'message': f'Order status updated to {order.get_status_display()}.',
@@ -515,13 +502,12 @@ class AdminPaymentUpdateView(APIView):
             new_value=data['payment_status']
         )
 
-        # ✅ Send payment confirmed email when payment becomes 'paid'
         if data['payment_status'] == 'paid':
             try:
                 from orders.emails import send_payment_confirmed
                 send_payment_confirmed(order)
-            except Exception as e:
-                print(f"⚠️ Payment confirmed email failed: {e}")
+            except Exception:
+                pass
 
         return Response({
             'message': f'Payment status updated to {order.get_payment_status_display()}.',
