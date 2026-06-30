@@ -9,7 +9,6 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
-from django.core.mail import send_mail
 from django.conf import settings
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
@@ -22,6 +21,12 @@ from accounts.serializers import (
     LoginSerializer,
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
+)
+from accounts.emails import (
+    send_verification_email,
+    send_welcome_email,
+    send_password_reset_email,
+    send_password_reset_success_email,
 )
 
 
@@ -52,17 +57,9 @@ class UserRegistrationView(generics.CreateAPIView):
         user.verification_token = verification_token
         user.save()
 
-        # Send verification email
-        verification_link = f"{settings.FRONTEND_URL}/verify-email/{verification_token}"
-        send_mail(
-            subject="Verify your email address",
-            message=f"Thank you for registering. Please verify your email by clicking the link: {verification_link}",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
+        # ✅ Send branded HTML verification email
+        send_verification_email(user, verification_token)
 
-        # Do NOT return token — user must verify email first
         return Response({
             'message': 'Registration successful. Please check your email to verify your account.',
             'user_id': user.id,
@@ -87,6 +84,10 @@ class VerifyEmailView(APIView):
             user.is_verified = True
             user.verification_token = None
             user.save()
+
+            # ✅ Send branded HTML welcome email
+            send_welcome_email(user)
+
             return Response({"message": "Email verified successfully."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"error": "Invalid or expired verification token."}, status=status.HTTP_400_BAD_REQUEST)
@@ -147,13 +148,10 @@ class PasswordResetRequestView(APIView):
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}"
-            send_mail(
-                subject="Password Reset Request",
-                message=f"Click the link to reset your password: {reset_link}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-                fail_silently=False,
-            )
+
+            # ✅ Send branded HTML password reset email
+            send_password_reset_email(user, reset_link)
+
         except User.DoesNotExist:
             # Return same message to avoid email enumeration
             pass
@@ -187,6 +185,10 @@ class PasswordResetConfirmView(APIView):
             if default_token_generator.check_token(user, token):
                 user.set_password(new_password)
                 user.save()
+
+                # ✅ Send branded HTML password reset success email
+                send_password_reset_success_email(user)
+
                 return Response({"message": "Password reset successful."}, status=status.HTTP_200_OK)
             else:
                 return Response({"error": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)

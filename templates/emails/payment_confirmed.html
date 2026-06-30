@@ -1,0 +1,21 @@
+{% extends "emails/base_email.html" %}
+{% block content %}
+  <h2>Payment Received ✅</h2>
+  <p>Hi <strong>{{ order.customer_name }}</strong>,</p>
+  <p>We've successfully received your payment for order <strong>#{{ order.order_number }}</strong>. Your order is now being processed!</p>
+
+  <div class="info-box">
+    <p>
+      💳 <strong>Amount Paid:</strong> ₦{{ order.total_amount }}<br/>
+      🔖 <strong>Paystack Reference:</strong> {{ order.paystack_reference }}<br/>
+      📅 <strong>Payment Date:</strong> {{ order.payment_date|date:"F j, Y g:i A" }}
+    </p>
+  </div>
+
+  <div style="text-align: center; margin-top: 24px;">
+    <a href="{{ frontend_url }}/orders/{{ order.order_number }}" class="btn">📦 View Order</a>
+  </div>
+
+  <hr class="divider" />
+  <p style="font-size: 13px; color: #888;">Keep this email as your payment receipt. If you have any issues, quote your Paystack reference above.</p>
+{% endblock %}

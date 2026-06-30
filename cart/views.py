@@ -73,7 +73,9 @@ class AddToCartView(APIView):
             400: openapi.Response(description="Validation error."),
         }
     )
+    
     def post(self, request):
+        print("REQUEST DATA:", request.data)
         serializer = AddToCartSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
