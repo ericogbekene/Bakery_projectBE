@@ -96,20 +96,10 @@ class CreateOrderView(APIView):
     )
     @transaction.atomic
     def post(self, request):
-        print("=" * 50)
-        print("CREATE ORDER - RAW REQUEST")
-        print("SESSION KEY:", request.session.session_key if hasattr(request, 'session') else 'NO SESSION')
-        print("SESSION DATA:", dict(request.session) if hasattr(request, 'session') else {})
-        print("AUTH HEADER:", request.headers.get('Authorization', 'None'))
-        print("=" * 50)
+       
 
         from cart.utils import get_or_create_cart
         cart = get_or_create_cart(request)
-
-        print(f"🔍 Cart found: {cart.id}")
-        print(f"🔍 Cart items: {cart.items.count()}")
-        print(f"🔍 Cart user: {cart.user}")
-        print(f"🔍 Cart is_active: {cart.is_active}")
 
         if cart.items.count() == 0:
             if request.user and request.user.is_authenticated:

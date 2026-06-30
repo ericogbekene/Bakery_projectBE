@@ -529,7 +529,7 @@ class OrderDelivery(models.Model):
 
 
 # ============================================================================
-# ORDER ITEM MODEL (NO CHANGES NEEDED - ALREADY PERFECT)
+# ORDER ITEM MODEL
 # ============================================================================
 
 class OrderItem(models.Model):
@@ -562,66 +562,83 @@ class OrderItem(models.Model):
     flavour_1 = models.CharField(
         max_length=50,
         blank=True,
+        null=True,
         help_text="First flavor chosen"
     )
     
     flavour_2 = models.CharField(
         max_length=50,
         blank=True,
+        null=True,
         help_text="Second flavor chosen"
     )
     
     size = models.CharField(
         max_length=20,
         blank=True,
+        null=True,
         help_text="Cake size (e.g., 6, 8, 10, 12, 14 inches)"
     )
     
     colours = models.CharField(
         max_length=100,
         blank=True,
+        null=True,
         help_text="Colors/decorations"
     )
     
     # Add-ons (Snapshot)
     cake_topper = models.PositiveIntegerField(
         default=0,
+        blank=True,
+        null=True,
         validators=[MinValueValidator(0)],
         help_text="Number of toppers"
     )
     
     candle = models.PositiveIntegerField(
         default=0,
+        blank=True,
+        null=True,
         validators=[MinValueValidator(0)],
         help_text="Number of candles"
     )
     
     birthday_card = models.PositiveIntegerField(
         default=0,
+        blank=True,
+        null=True,
         validators=[MinValueValidator(0)],
         help_text="Number of cards"
     )
     
     chocolate = models.PositiveIntegerField(
         default=0,
+        blank=True,
+        null=True,
         validators=[MinValueValidator(0)],
         help_text="Number of chocolate boxes"
     )
     
     wine = models.PositiveIntegerField(
         default=0,
+        blank=True,
+        null=True,
         validators=[MinValueValidator(0)],
         help_text="Number of wine bottles"
     )
     
     whiskey_200ml = models.PositiveIntegerField(
         default=0,
+        blank=True,
+        null=True,
         validators=[MinValueValidator(0)],
         help_text="Number of whiskey bottles"
     )
     
     additional_notes = models.TextField(
         blank=True,
+        null=True,
         max_length=1000,
         help_text="Special instructions for this item"
     )
