@@ -57,8 +57,11 @@ class UserRegistrationView(generics.CreateAPIView):
         user.verification_token = verification_token
         user.save()
 
-        # ✅ Send branded HTML verification email
-        send_verification_email(user, verification_token)
+        # Email is non-fatal — never 500 if Brevo is slow/down
+        try:
+            send_verification_email(user, verification_token)
+        except Exception:
+            pass
 
         return Response({
             'message': 'Registration successful. Please check your email to verify your account.',
@@ -85,8 +88,11 @@ class VerifyEmailView(APIView):
             user.verification_token = None
             user.save()
 
-            # ✅ Send branded HTML welcome email
-            send_welcome_email(user)
+            # Email is non-fatal
+            try:
+                send_welcome_email(user)
+            except Exception:
+                pass
 
             return Response({"message": "Email verified successfully."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
@@ -149,11 +155,13 @@ class PasswordResetRequestView(APIView):
             token = default_token_generator.make_token(user)
             reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}"
 
-            # ✅ Send branded HTML password reset email
-            send_password_reset_email(user, reset_link)
+            # Email is non-fatal
+            try:
+                send_password_reset_email(user, reset_link)
+            except Exception:
+                pass
 
         except User.DoesNotExist:
-            # Return same message to avoid email enumeration
             pass
 
         return Response(
@@ -186,8 +194,11 @@ class PasswordResetConfirmView(APIView):
                 user.set_password(new_password)
                 user.save()
 
-                # ✅ Send branded HTML password reset success email
-                send_password_reset_success_email(user)
+                # Email is non-fatal
+                try:
+                    send_password_reset_success_email(user)
+                except Exception:
+                    pass
 
                 return Response({"message": "Password reset successful."}, status=status.HTTP_200_OK)
             else:
