@@ -159,7 +159,6 @@ class UpdateCartItemSerializer(serializers.Serializer):
         default='set'
     )
 
-
 class CartSerializer(serializers.ModelSerializer):
     """
     Serializer for the entire cart.
@@ -173,7 +172,7 @@ class CartSerializer(serializers.ModelSerializer):
     class Meta:
         model = Cart
         fields = [
-            'id',
+            'id', 'fulfillment_type',
             'items', 'item_count', 'subtotal',
             'delivery_cost', 'grand_total',
             'created_at', 'updated_at'

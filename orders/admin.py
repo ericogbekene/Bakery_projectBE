@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.timezone import now
 from .models import (
-    Order, OrderItem, OrderDelivery, 
+    Order, OrderItem, OrderDelivery, OrderPickup,
     OrderHistory, OrderPayment
 )
 
@@ -47,6 +47,23 @@ class OrderDeliveryInline(admin.StackedInline):
     extra = 0
 
 
+class OrderPickupInline(admin.StackedInline):
+    model = OrderPickup
+    fieldsets = [
+        ('Pickup Schedule', {
+            'fields': ['pickup_date', 'pickup_time_slot']
+        }),
+        ('Pickup Status', {
+            'fields': ['is_picked_up', 'picked_up_at', 'pickup_notes']
+        }),
+        ('Instructions', {
+            'fields': ['special_instructions']
+        }),
+    ]
+    readonly_fields = ['created_at', 'updated_at']
+    extra = 0
+
+
 class OrderHistoryInline(admin.TabularInline):
     model = OrderHistory
     fields = ['action', 'description', 'changed_by', 'timestamp', 'old_value', 'new_value']
@@ -76,14 +93,14 @@ class OrderPaymentInline(admin.TabularInline):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
-        'order_number', 'customer_info', 'order_total', 
+        'order_number', 'customer_info', 'fulfillment_type', 'order_total',
         'status_colored', 'payment_status_colored', 'paystack_reference_display', 'created_at'
     ]
-    list_filter = ['status', 'payment_status', 'created_at', 'delivery__city']
+    list_filter = ['fulfillment_type', 'status', 'payment_status', 'created_at']
     search_fields = ['order_number', 'customer_name', 'customer_email', 'customer_phone', 
                      'paystack_transaction_id', 'paystack_reference']
     readonly_fields = [
-        'order_number', 'user', 'cart', 'subtotal', 'delivery_fee', 'total_amount',
+        'order_number', 'user', 'cart', 'fulfillment_type', 'subtotal', 'delivery_fee', 'total_amount',
         'payment_method',
         'paystack_transaction_id', 'paystack_reference', 'paystack_response',
         'created_at', 'updated_at', 'confirmed_at', 'processing_at',
@@ -91,6 +108,7 @@ class OrderAdmin(admin.ModelAdmin):
     ]
     inlines = [
         OrderDeliveryInline,
+        OrderPickupInline,
         OrderItemInline,
         OrderPaymentInline,
         OrderHistoryInline
@@ -98,7 +116,7 @@ class OrderAdmin(admin.ModelAdmin):
     
     fieldsets = [
         ('Order Information', {
-            'fields': ['order_number', 'user', 'cart']
+            'fields': ['order_number', 'user', 'cart', 'fulfillment_type']
         }),
         ('Customer Information', {
             'fields': [
@@ -229,6 +247,33 @@ class OrderDeliveryAdmin(admin.ModelAdmin):
         }),
         ('Delivery Status', {
             'fields': ['is_delivered', 'delivered_at', 'delivery_notes']
+        }),
+        ('Instructions', {
+            'fields': ['special_instructions']
+        }),
+        ('Timestamps', {
+            'fields': ['created_at', 'updated_at'],
+            'classes': ['collapse']
+        }),
+    ]
+
+
+@admin.register(OrderPickup)
+class OrderPickupAdmin(admin.ModelAdmin):
+    list_display = ['order', 'pickup_date', 'pickup_time_slot', 'is_picked_up']
+    list_filter = ['pickup_date', 'is_picked_up']
+    search_fields = ['order__order_number']
+    readonly_fields = ['created_at', 'updated_at', 'picked_up_at']
+
+    fieldsets = [
+        ('Order', {
+            'fields': ['order']
+        }),
+        ('Schedule', {
+            'fields': ['pickup_date', 'pickup_time_slot']
+        }),
+        ('Pickup Status', {
+            'fields': ['is_picked_up', 'picked_up_at', 'pickup_notes']
         }),
         ('Instructions', {
             'fields': ['special_instructions']

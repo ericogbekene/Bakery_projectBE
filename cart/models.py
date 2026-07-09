@@ -4,11 +4,18 @@ from django.core.validators import MinValueValidator
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
 from django.conf import settings
+from delivery.constants import NIGERIA_STATES
 
 
 # ============================================================================
 # CUSTOMIZATION PRICING MODELS
 # ============================================================================
+
+
+FULFILLMENT_TYPE_CHOICES = [
+    ('delivery', 'Delivery'),
+    ('pickup', 'Pickup'),
+]
 
 class CakeCustomizationOption(models.Model):
     CUSTOMIZATION_TYPES = [
@@ -232,6 +239,12 @@ class Cart(models.Model):
         db_index=True
     )
 
+    fulfillment_type = models.CharField(
+        max_length=10,
+        choices=FULFILLMENT_TYPE_CHOICES,
+        default='delivery',
+        help_text="Whether customer chose pickup or delivery"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
@@ -273,8 +286,10 @@ class Cart(models.Model):
     def delivery_cost(self):
         """
         Get delivery cost from DeliveryInfo if available.
-        Fixed: was always returning 0.00 — now reads from calculated_fee.
+        Pickup orders always have zero delivery cost — no DeliveryInfo lookup needed.
         """
+        if self.fulfillment_type == 'pickup':
+            return Decimal('0.00')
         try:
             return self.delivery_info.calculated_fee or Decimal('0.00')
         except DeliveryInfo.DoesNotExist:
@@ -717,7 +732,12 @@ class DeliveryInfo(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
     city = models.CharField(max_length=100, blank=True)
-    state = models.CharField(max_length=100, blank=True)
+    state = models.CharField(
+        max_length=20,
+        choices=NIGERIA_STATES,
+        blank=True,
+        help_text="State for delivery fee calculation"
+    )
     postal_code = models.CharField(max_length=20, blank=True)
 
     delivery_date = models.DateField(null=True, blank=True)

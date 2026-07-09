@@ -398,11 +398,11 @@ class DeliveryInfoView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        if delivery_info.city:
+        if delivery_info.state:
             try:
-                result = DeliveryService.calculate_delivery_fee(
-                    city=delivery_info.city,
-                    order_total=cart.subtotal
+                result = DeliveryService.calculate_delivery_fee_by_state(
+                    state=delivery_info.state,
+                    is_pickup=(cart.fulfillment_type == 'pickup')
                 )
                 if result.get('available'):
                     delivery_info.calculated_fee = result['fee']
@@ -415,7 +415,35 @@ class DeliveryInfoView(APIView):
             'delivery_info': DeliveryInfoSerializer(delivery_info).data
         })
 
+# ============================================================================
+# CART FULFILLMENT TYPE VIEW
+# ============================================================================
 
+class CartFulfillmentTypeView(APIView):
+    """
+    POST /api/cart/fulfillment-type/ - Set pickup or delivery for the cart
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        cart = get_or_create_cart(request)
+        fulfillment_type = request.data.get('fulfillment_type')
+
+        if fulfillment_type not in ('delivery', 'pickup'):
+            return Response(
+                {'fulfillment_type': "Must be 'delivery' or 'pickup'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        cart.fulfillment_type = fulfillment_type
+        cart.save(update_fields=['fulfillment_type'])
+
+        return Response({
+            'message': 'Fulfillment type updated.',
+            'cart': CartSerializer(cart).data
+        })
+    
+    
 # ============================================================================
 # GUEST CART MERGE
 # ============================================================================
