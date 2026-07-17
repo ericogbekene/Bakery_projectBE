@@ -40,6 +40,7 @@ class DeliveryZoneDetailView(generics.RetrieveAPIView):
     Get detailed information about a specific delivery zone.
     """
     permission_classes = [permissions.AllowAny]
+    pagination_class = None
     queryset = DeliveryZone.objects.filter(status='active')
     serializer_class = DeliveryZoneSerializer
     lookup_field = 'id'

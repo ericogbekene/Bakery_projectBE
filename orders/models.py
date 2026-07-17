@@ -780,9 +780,11 @@ class OrderItem(models.Model):
         return f"{self.quantity}x {product_name} - Order #{self.order.order_number}"
     
     def save(self, *args, **kwargs):
-        """Calculate totals on save"""
-        self.unit_price = self.base_price + self.customization_cost
-        self.item_total = self.unit_price * self.quantity
+        """
+        unit_price and item_total are snapshots passed in from the cart
+        item at order-creation time (already includes size/flavor
+        multipliers). Do not recalculate here.
+        """
         super().save(*args, **kwargs)
     
     @property
