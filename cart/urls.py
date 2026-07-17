@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .views import SavedDeliveryInfoView
 
 app_name = 'cart-api'
 
@@ -16,6 +17,7 @@ urlpatterns = [
 
     # Fulfillment type (pickup / delivery)
     path('fulfillment-type/', views.CartFulfillmentTypeView.as_view(), name='cart-fulfillment-type'),
+    path('saved-delivery-info/', SavedDeliveryInfoView.as_view(), name='saved-delivery-info'),
 
     # Delivery endpoints
     path('delivery/', views.DeliveryInfoView.as_view(), name='cart-delivery'),

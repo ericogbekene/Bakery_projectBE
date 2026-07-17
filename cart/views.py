@@ -7,7 +7,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from decimal import Decimal
 
-from cart.models import Cart, CartItem, DeliveryInfo, CartItemAddon, CakeCustomizationOption
+from cart.models import Cart, CartItem, DeliveryInfo, CartItemAddon, CakeCustomizationOption,SavedDeliveryInfo
 from products.models import Product
 from cart.utils import (
     get_or_create_cart,
@@ -492,4 +492,29 @@ class MergeGuestCartView(APIView):
         return Response({
             'message': 'Carts merged successfully.',
             'cart': CartSerializer(merged_cart).data
+        })
+
+
+class SavedDeliveryInfoView(APIView):
+    """
+    GET /api/cart/saved-delivery-info/
+    Returns the authenticated user's saved delivery info, if any,
+    so the frontend can prefill the checkout form.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            saved = request.user.saved_delivery_info
+        except SavedDeliveryInfo.DoesNotExist:
+            return Response({'exists': False})
+
+        return Response({
+            'exists': True,
+            'full_name': saved.full_name,
+            'phone': saved.phone,
+            'address': saved.address,
+            'city': saved.city,
+            'state': saved.state,
+            'postal_code': saved.postal_code,
         })

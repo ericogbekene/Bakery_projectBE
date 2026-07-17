@@ -760,3 +760,31 @@ class DeliveryInfo(models.Model):
 
     def __str__(self):
         return f"Delivery for Cart {self.cart_id}"
+
+class SavedDeliveryInfo(models.Model):
+    """
+    Persistent delivery details tied to a user account, used to prefill
+    the checkout form on future orders. Updated (not replaced) every
+    time an authenticated user completes a delivery order.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='saved_delivery_info'
+    )
+
+    full_name = models.CharField(max_length=100, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    address = models.TextField(blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=20, choices=NIGERIA_STATES, blank=True)
+    postal_code = models.CharField(max_length=20, blank=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Saved Delivery Info'
+        verbose_name_plural = 'Saved Delivery Info'
+
+    def __str__(self):
+        return f"Saved delivery info for {self.user}"

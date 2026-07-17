@@ -1072,6 +1072,21 @@ def create_order_from_cart(cart, customer_data, fulfillment_data, payment_method
                 delivery_fee=delivery_fee,
                 special_instructions=fulfillment_data.get('special_instructions', '')
             )
+
+            # Save/update this user's delivery info for future prefill
+            if cart.user:
+                from cart.models import SavedDeliveryInfo
+                SavedDeliveryInfo.objects.update_or_create(
+                    user=cart.user,
+                    defaults={
+                        'full_name': customer_data['name'],
+                        'phone': customer_data['phone'],
+                        'address': fulfillment_data['address'],
+                        'city': fulfillment_data['city'],
+                        'state': fulfillment_data.get('state', ''),
+                        'postal_code': fulfillment_data.get('postal_code', ''),
+                    }
+                )
         else:  # pickup
             OrderPickup.objects.create(
                 order=order,
