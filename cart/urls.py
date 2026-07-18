@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .views import SavedDeliveryInfoView
 
 app_name = 'cart-api'
 
@@ -10,13 +11,17 @@ urlpatterns = [
     path('count/', views.CartItemCountView.as_view(), name='cart-count'),
     path('summary/', views.CartSummaryView.as_view(), name='cart-summary'),
     path('calculate-price/', views.CalculatePriceView.as_view(), name='calculate-price'),
-    
+
     # Cart item endpoints
     path('items/<int:item_id>/', views.CartItemDetailView.as_view(), name='cart-item-detail'),
-    
+
+    # Fulfillment type (pickup / delivery)
+    path('fulfillment-type/', views.CartFulfillmentTypeView.as_view(), name='cart-fulfillment-type'),
+    path('saved-delivery-info/', SavedDeliveryInfoView.as_view(), name='saved-delivery-info'),
+
     # Delivery endpoints
     path('delivery/', views.DeliveryInfoView.as_view(), name='cart-delivery'),
-    
+
     # Guest cart merging (for authenticated users)
     path('merge/', views.MergeGuestCartView.as_view(), name='cart-merge'),
 ]

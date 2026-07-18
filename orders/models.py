@@ -39,6 +39,11 @@ PAYMENT_METHOD_CHOICES = [
     ('cash', 'Cash on Delivery'),
 ]
 
+FULFILLMENT_TYPE_CHOICES = [
+    ('delivery', 'Delivery'),
+    ('pickup', 'Pickup'),
+]
+
 
 # ============================================================================
 # ORDER MODEL (UPDATED FOR PAYSTACK)
@@ -89,6 +94,14 @@ class Order(models.Model):
         blank=True,
         related_name='orders',
         help_text="Original cart (for reference, cart becomes inactive after order)"
+    )
+    
+    fulfillment_type = models.CharField(
+        max_length=10,
+        choices=FULFILLMENT_TYPE_CHOICES,
+        default='delivery',
+        db_index=True,
+        help_text="Whether customer chose pickup or delivery"
     )
     
     # Customer Contact (Snapshot at order time)
@@ -427,6 +440,7 @@ class OrderDelivery(models.Model):
     Separate model for delivery information.
     Snapshot of delivery details at order time.
     Matches the pattern used in Cart app with DeliveryInfo.
+    Only created for orders where fulfillment_type == 'delivery'.
     """
     
     order = models.OneToOneField(
@@ -523,6 +537,81 @@ class OrderDelivery(models.Model):
         self.delivered_at = now()
         self.save()
         
+        # Update order status if not already completed
+        if self.order.status != 'completed':
+            self.order.update_status('completed')
+
+
+# ============================================================================
+# ORDER PICKUP MODEL (SEPARATE, MIRRORS ORDER DELIVERY)
+# ============================================================================
+
+class OrderPickup(models.Model):
+    """
+    Separate model for pickup information.
+    Snapshot of pickup details at order time.
+    Only created for orders where fulfillment_type == 'pickup'.
+    No address needed — customer collects from the bakery.
+    """
+
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='pickup',
+        help_text="Related order"
+    )
+
+    # Pickup Schedule
+    pickup_date = models.DateField(
+        help_text="Requested pickup date"
+    )
+
+    pickup_time_slot = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Preferred time slot (e.g., '10am-12pm')"
+    )
+
+    # Special Instructions
+    special_instructions = models.TextField(
+        blank=True,
+        max_length=1000,
+        help_text="Special instructions for pickup"
+    )
+
+    # Pickup Status (separate from order status)
+    is_picked_up = models.BooleanField(
+        default=False,
+        help_text="Whether pickup has been completed"
+    )
+
+    picked_up_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When pickup was completed"
+    )
+
+    pickup_notes = models.TextField(
+        blank=True,
+        help_text="Notes from staff at pickup"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Order Pickup'
+        verbose_name_plural = 'Order Pickups'
+
+    def __str__(self):
+        return f"Pickup for Order #{self.order.order_number} - {self.pickup_date}"
+
+    def mark_picked_up(self):
+        """Mark pickup as completed"""
+        self.is_picked_up = True
+        self.picked_up_at = now()
+        self.save()
+
         # Update order status if not already completed
         if self.order.status != 'completed':
             self.order.update_status('completed')
@@ -691,9 +780,11 @@ class OrderItem(models.Model):
         return f"{self.quantity}x {product_name} - Order #{self.order.order_number}"
     
     def save(self, *args, **kwargs):
-        """Calculate totals on save"""
-        self.unit_price = self.base_price + self.customization_cost
-        self.item_total = self.unit_price * self.quantity
+        """
+        unit_price and item_total are snapshots passed in from the cart
+        item at order-creation time (already includes size/flavor
+        multipliers). Do not recalculate here.
+        """
         super().save(*args, **kwargs)
     
     @property
@@ -901,22 +992,31 @@ class OrderPayment(models.Model):
 # ORDER SERVICE FUNCTIONS
 # ============================================================================
 
-def create_order_from_cart(cart, customer_data, delivery_data, payment_method=''):
+def create_order_from_cart(cart, customer_data, fulfillment_data, payment_method=''):
     """
     Create an order from a cart with all necessary snapshots.
-    
+    Branches on cart.fulfillment_type to create either an
+    OrderDelivery or an OrderPickup — never both.
+
     Args:
         cart: Cart instance to convert
         customer_data: Dict with 'name', 'email', 'phone'
-        delivery_data: Dict with address, city, date, etc.
+        fulfillment_data: Dict with delivery or pickup details, depending
+            on cart.fulfillment_type:
+              - delivery: address, city, state, postal_code, delivery_date,
+                delivery_time_slot, delivery_zone, delivery_fee, special_instructions
+              - pickup: pickup_date, pickup_time_slot, special_instructions
         payment_method: Optional payment method
-    
+
     Returns:
         Order instance
     """
     from django.db import transaction
-    
+
     with transaction.atomic():
+        fulfillment_type = cart.fulfillment_type
+        delivery_fee = fulfillment_data.get('delivery_fee', Decimal('0.00')) if fulfillment_type == 'delivery' else Decimal('0.00')
+
         # 1. Create the Order
         order = Order.objects.create(
             user=cart.user,
@@ -926,14 +1026,15 @@ def create_order_from_cart(cart, customer_data, delivery_data, payment_method=''
             customer_email=customer_data['email'],
             customer_phone=customer_data['phone'],
             cart=cart,
+            fulfillment_type=fulfillment_type,
             subtotal=cart.subtotal,
-            delivery_fee=delivery_data.get('delivery_fee', Decimal('0.00')),
-            total_amount=cart.subtotal + delivery_data.get('delivery_fee', Decimal('0.00')),
+            delivery_fee=delivery_fee,
+            total_amount=cart.subtotal + delivery_fee,
             payment_method=payment_method or 'paystack',
             status='pending',
             payment_status='pending'
         )
-        
+
         # 2. Create Order Items from Cart Items
         for cart_item in cart.items.all():
             OrderItem.objects.create(
@@ -956,21 +1057,44 @@ def create_order_from_cart(cart, customer_data, delivery_data, payment_method=''
                 unit_price=cart_item.unit_price,
                 item_total=cart_item.total_item_price
             )
-        
-        # 3. Create Order Delivery
-        OrderDelivery.objects.create(
-            order=order,
-            address=delivery_data['address'],
-            city=delivery_data['city'],
-            state=delivery_data.get('state', ''),
-            postal_code=delivery_data.get('postal_code', ''),
-            delivery_date=delivery_data['delivery_date'],
-            delivery_time_slot=delivery_data.get('delivery_time_slot', ''),
-            delivery_zone=delivery_data.get('delivery_zone', ''),
-            delivery_fee=delivery_data.get('delivery_fee', Decimal('0.00')),
-            special_instructions=delivery_data.get('special_instructions', '')
-        )
-        
+
+        # 3. Create Order Delivery or Order Pickup — never both
+        if fulfillment_type == 'delivery':
+            OrderDelivery.objects.create(
+                order=order,
+                address=fulfillment_data['address'],
+                city=fulfillment_data['city'],
+                state=fulfillment_data.get('state', ''),
+                postal_code=fulfillment_data.get('postal_code', ''),
+                delivery_date=fulfillment_data['delivery_date'],
+                delivery_time_slot=fulfillment_data.get('delivery_time_slot', ''),
+                delivery_zone=fulfillment_data.get('delivery_zone', ''),
+                delivery_fee=delivery_fee,
+                special_instructions=fulfillment_data.get('special_instructions', '')
+            )
+
+            # Save/update this user's delivery info for future prefill
+            if cart.user:
+                from cart.models import SavedDeliveryInfo
+                SavedDeliveryInfo.objects.update_or_create(
+                    user=cart.user,
+                    defaults={
+                        'full_name': customer_data['name'],
+                        'phone': customer_data['phone'],
+                        'address': fulfillment_data['address'],
+                        'city': fulfillment_data['city'],
+                        'state': fulfillment_data.get('state', ''),
+                        'postal_code': fulfillment_data.get('postal_code', ''),
+                    }
+                )
+        else:  # pickup
+            OrderPickup.objects.create(
+                order=order,
+                pickup_date=fulfillment_data['pickup_date'],
+                pickup_time_slot=fulfillment_data.get('pickup_time_slot', ''),
+                special_instructions=fulfillment_data.get('special_instructions', '')
+            )
+
         # 4. Create Order History entry
         OrderHistory.objects.create(
             order=order,
@@ -978,7 +1102,7 @@ def create_order_from_cart(cart, customer_data, delivery_data, payment_method=''
             description=f"Order created from cart #{cart.id}",
             changed_by=cart.user
         )
-        
+
         # Cart remains active until payment is confirmed.
         # Deactivation happens in payment/views.py after Paystack confirms payment.
         return order

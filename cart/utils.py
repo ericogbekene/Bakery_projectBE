@@ -6,7 +6,7 @@ from django.db.utils import IntegrityError
 def get_or_create_cart(request):
     """
     Get existing cart or create new one for user/guest.
-    For authenticated users: returns their active cart.
+    For authenticated users: returns their single active cart.
     For guests: returns cart linked to session key.
     Handles merging of guest cart to user cart on login.
     """
@@ -15,7 +15,17 @@ def get_or_create_cart(request):
     cart = None
 
     if request.user.is_authenticated:
-        cart = Cart.objects.filter(user=request.user, is_active=True).first()
+        # Deterministically pick the most recent active cart, and if the
+        # user somehow has more than one (a legacy/duplicate-cart bug),
+        # deactivate the extras so future lookups are unambiguous.
+        active_carts = list(
+            Cart.objects.filter(user=request.user, is_active=True).order_by('-created_at')
+        )
+        if active_carts:
+            cart = active_carts[0]
+            if len(active_carts) > 1:
+                stale_ids = [c.id for c in active_carts[1:]]
+                Cart.objects.filter(id__in=stale_ids).update(is_active=False)
 
         # If user has a session cart, merge it into their user cart
         if 'cart_id' in request.session:
@@ -59,7 +69,9 @@ def get_cart_if_exists(request):
     from .models import Cart
 
     if request.user.is_authenticated:
-        return Cart.objects.filter(user=request.user, is_active=True).first()
+        return Cart.objects.filter(
+            user=request.user, is_active=True
+        ).order_by('-created_at').first()
 
     # Guest — try cart_id in session first
     cart_id = request.session.get('cart_id')
@@ -85,12 +97,25 @@ def get_cart_if_exists(request):
 def create_new_cart(request):
     """
     Create a new cart for user or guest.
+    For authenticated users, guards against creating a duplicate active
+    cart with a select-for-update + get_or_create pattern, since a second
+    active cart for the same user leads to the wrong cart being picked up
+    downstream (checkout totals, order creation, etc.).
     """
     from .models import Cart
 
     if request.user.is_authenticated:
-        cart = Cart(user=request.user)
-        cart.save()
+        try:
+            with transaction.atomic():
+                cart, _ = Cart.objects.get_or_create(
+                    user=request.user,
+                    is_active=True,
+                    defaults={},
+                )
+        except IntegrityError:
+            cart = Cart.objects.filter(
+                user=request.user, is_active=True
+            ).order_by('-created_at').first()
         return cart
 
     if not request.session.session_key:

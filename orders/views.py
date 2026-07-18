@@ -17,7 +17,7 @@ from orders.emails import (
 from cart.models import Cart, DeliveryInfo
 from .serializers import (
     OrderListSerializer, OrderDetailSerializer, CreateOrderSerializer,
-    OrderCancelSerializer, OrderStatusUpdateSerializer, OrderPaymentUpdateSerializer
+    OrderCancelSerializer, OrderStatusUpdateSerializer, OrderPaymentUpdateSerializer,
 )
 
 
@@ -78,6 +78,7 @@ class OrderDetailView(generics.RetrieveAPIView):
     lookup_field = 'id'
 
 
+
 class CreateOrderView(APIView):
     """
     POST /api/orders/create/
@@ -98,28 +99,12 @@ class CreateOrderView(APIView):
         from cart.utils import get_or_create_cart
         cart = get_or_create_cart(request)
 
-        if cart.items.count() == 0:
-            if request.user and request.user.is_authenticated:
-                user_cart = Cart.objects.filter(
-                    user=request.user,
-                    is_active=True
-                ).exclude(id=cart.id).first()
-
-                if user_cart and user_cart.items.count() > 0:
-                    cart = user_cart
-                else:
-                    any_cart = Cart.objects.filter(user=request.user).order_by('-created_at').first()
-                    if any_cart and any_cart.items.count() > 0:
-                        any_cart.is_active = True
-                        any_cart.save()
-                        cart = any_cart
-
-            if cart.items.count() == 0 and request.session.get('cart_id'):
-                session_cart_id = request.session.get('cart_id')
-                session_cart = Cart.objects.filter(id=session_cart_id, is_active=True).first()
-                if session_cart and session_cart.items.count() > 0:
-                    cart = session_cart
-
+        # NOTE: previously this fell back to hunting for "any other active
+        # cart with items" when the resolved cart was empty. That fallback
+        # could silently substitute a stale/unrelated cart (wrong totals
+        # sent to Paystack). get_or_create_cart is now the single source
+        # of truth for cart resolution — if it returns an empty cart, that
+        # is a real error, not something to paper over by guessing.
         if cart.items.count() == 0:
             return Response(
                 {'error': 'Cart is empty. Please add items before ordering.'},
@@ -133,18 +118,26 @@ class CreateOrderView(APIView):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
-        delivery_info, _ = DeliveryInfo.objects.get_or_create(cart=cart)
 
-        delivery_data = {
-            'address': data['delivery_address'],
-            'city': data['delivery_city'],
-            'state': data.get('delivery_state') or '',
-            'postal_code': data.get('delivery_postal_code') or '',
-            'delivery_date': data['delivery_date'],
-            'delivery_time_slot': data.get('delivery_time_slot') or '',
-            'special_instructions': data.get('special_instructions') or '',
-            'delivery_fee': cart.delivery_cost or Decimal('0.00'),
-        }
+        # ── Build fulfillment_data based on cart's fulfillment type ───────
+        if cart.fulfillment_type == 'delivery':
+            delivery_info, _ = DeliveryInfo.objects.get_or_create(cart=cart)
+            fulfillment_data = {
+                'address': data['delivery_address'],
+                'city': data['delivery_city'],
+                'state': data.get('delivery_state') or '',
+                'postal_code': data.get('delivery_postal_code') or '',
+                'delivery_date': data['delivery_date'],
+                'delivery_time_slot': data.get('delivery_time_slot') or '',
+                'special_instructions': data.get('special_instructions') or '',
+                'delivery_fee': cart.delivery_cost or Decimal('0.00'),
+            }
+        else:  # pickup
+            fulfillment_data = {
+                'pickup_date': data['pickup_date'],
+                'pickup_time_slot': data.get('pickup_time_slot') or '',
+                'special_instructions': data.get('special_instructions') or '',
+            }
 
         # ── All DB work inside a single atomic block ──────────────────────
         is_authenticated = False
@@ -166,7 +159,7 @@ class CreateOrderView(APIView):
                     'email': data['customer_email'],
                     'phone': data['customer_phone'],
                 },
-                delivery_data=delivery_data,
+                fulfillment_data=fulfillment_data,
             )
 
             if is_authenticated and user:
@@ -214,6 +207,8 @@ class CreateOrderView(APIView):
             'order_id': order.id,
             'order_number': order.order_number,
         }, status=status.HTTP_201_CREATED)
+
+
 
 
 class CancelOrderView(APIView):
@@ -304,12 +299,18 @@ class CheckoutOrderView(APIView):
             if order.payment_status == 'paid':
                 return Response({'error': 'This order has already been paid.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            delivery_info = None
-            if hasattr(order, 'delivery') and order.delivery:
-                delivery_info = {
+            fulfillment_info = None
+            if order.fulfillment_type == 'delivery' and hasattr(order, 'delivery'):
+                fulfillment_info = {
+                    'type': 'delivery',
                     'delivery_date': order.delivery.delivery_date,
                     'address': order.delivery.address,
                     'city': order.delivery.city,
+                }
+            elif order.fulfillment_type == 'pickup' and hasattr(order, 'pickup'):
+                fulfillment_info = {
+                    'type': 'pickup',
+                    'pickup_date': order.pickup.pickup_date,
                 }
 
             return Response({
@@ -320,7 +321,7 @@ class CheckoutOrderView(APIView):
                 'amount': str(order.total_amount),
                 'customer_name': order.customer_name,
                 'customer_email': order.customer_email,
-                'delivery': delivery_info,
+                'fulfillment': fulfillment_info,
             }, status=status.HTTP_200_OK)
 
         else:

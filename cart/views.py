@@ -7,7 +7,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from decimal import Decimal
 
-from cart.models import Cart, CartItem, DeliveryInfo, CartItemAddon, CakeCustomizationOption
+from cart.models import Cart, CartItem, DeliveryInfo, CartItemAddon, CakeCustomizationOption,SavedDeliveryInfo
 from products.models import Product
 from cart.utils import (
     get_or_create_cart,
@@ -398,11 +398,11 @@ class DeliveryInfoView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        if delivery_info.city:
+        if delivery_info.state:
             try:
-                result = DeliveryService.calculate_delivery_fee(
-                    city=delivery_info.city,
-                    order_total=cart.subtotal
+                result = DeliveryService.calculate_delivery_fee_by_state(
+                    state=delivery_info.state,
+                    is_pickup=(cart.fulfillment_type == 'pickup')
                 )
                 if result.get('available'):
                     delivery_info.calculated_fee = result['fee']
@@ -415,7 +415,35 @@ class DeliveryInfoView(APIView):
             'delivery_info': DeliveryInfoSerializer(delivery_info).data
         })
 
+# ============================================================================
+# CART FULFILLMENT TYPE VIEW
+# ============================================================================
 
+class CartFulfillmentTypeView(APIView):
+    """
+    POST /api/cart/fulfillment-type/ - Set pickup or delivery for the cart
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        cart = get_or_create_cart(request)
+        fulfillment_type = request.data.get('fulfillment_type')
+
+        if fulfillment_type not in ('delivery', 'pickup'):
+            return Response(
+                {'fulfillment_type': "Must be 'delivery' or 'pickup'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        cart.fulfillment_type = fulfillment_type
+        cart.save(update_fields=['fulfillment_type'])
+
+        return Response({
+            'message': 'Fulfillment type updated.',
+            'cart': CartSerializer(cart).data
+        })
+    
+    
 # ============================================================================
 # GUEST CART MERGE
 # ============================================================================
@@ -464,4 +492,29 @@ class MergeGuestCartView(APIView):
         return Response({
             'message': 'Carts merged successfully.',
             'cart': CartSerializer(merged_cart).data
+        })
+
+
+class SavedDeliveryInfoView(APIView):
+    """
+    GET /api/cart/saved-delivery-info/
+    Returns the authenticated user's saved delivery info, if any,
+    so the frontend can prefill the checkout form.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            saved = request.user.saved_delivery_info
+        except SavedDeliveryInfo.DoesNotExist:
+            return Response({'exists': False})
+
+        return Response({
+            'exists': True,
+            'full_name': saved.full_name,
+            'phone': saved.phone,
+            'address': saved.address,
+            'city': saved.city,
+            'state': saved.state,
+            'postal_code': saved.postal_code,
         })
