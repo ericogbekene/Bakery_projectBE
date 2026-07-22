@@ -9,6 +9,7 @@ urlpatterns = [
     path('zones/<int:id>/', views.DeliveryZoneDetailView.as_view(), name='zone-detail'),
     path('calculate/', views.CalculateDeliveryFeeView.as_view(), name='calculate-fee'),
     path('available-dates/', views.AvailableDeliveryDatesView.as_view(), name='available-dates'),
+    
 
     # Admin endpoints
     path('admin/zones/', views.AdminDeliveryZoneListView.as_view(), name='admin-zone-list'),

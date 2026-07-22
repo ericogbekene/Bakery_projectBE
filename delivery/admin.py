@@ -7,18 +7,23 @@ from .models import (
 
 @admin.register(DeliveryZone)
 class DeliveryZoneAdmin(admin.ModelAdmin):
+    """
+    Admin can freely add, rename, or remove delivery areas here —
+    there's no predefined list of neighborhoods. Only zones with
+    status='active' show up on the frontend dropdown.
+    """
     list_display = [
-        'id', 'state', 'fee', 'status', 'status_colored', 'updated_at'
+        'id', 'area_name', 'fee', 'status', 'status_colored', 'updated_at'
     ]
-    list_display_links = ['id', 'state']
+    list_display_links = ['id', 'area_name']
     list_editable = ['fee', 'status']
     list_filter = ['status']
-    search_fields = ['state']
-    ordering = ['state']
+    search_fields = ['area_name']
+    ordering = ['area_name']
 
     fieldsets = [
         ('Zone', {
-            'fields': ['state', 'fee', 'status']
+            'fields': ['area_name', 'fee', 'status']
         }),
         ('Timestamps', {
             'fields': ['created_at', 'updated_at'],
@@ -64,7 +69,7 @@ class DeliveryScheduleAdmin(admin.ModelAdmin):
     list_display_links = ['id', 'zone']
     list_editable = ['max_orders_per_slot', 'current_orders', 'is_active']
     list_filter = ['zone', 'day_of_week', 'is_active']
-    search_fields = ['zone__state', 'time_slot_name']
+    search_fields = ['zone__area_name', 'time_slot_name']
 
     fieldsets = [
         ('Zone & Day', {
@@ -141,5 +146,5 @@ class DeliveryExceptionAdmin(admin.ModelAdmin):
         zones = obj.zones.all()
         if not zones:
             return "All Zones"
-        return ", ".join([z.get_state_display() for z in zones])
+        return ", ".join([z.area_name for z in zones])
     affected_zones.short_description = 'Affected Zones'

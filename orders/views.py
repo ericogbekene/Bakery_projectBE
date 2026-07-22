@@ -121,11 +121,10 @@ class CreateOrderView(APIView):
 
         # ── Build fulfillment_data based on cart's fulfillment type ───────
         if cart.fulfillment_type == 'delivery':
-            delivery_info, _ = DeliveryInfo.objects.get_or_create(cart=cart)
             fulfillment_data = {
                 'address': data['delivery_address'],
                 'city': data['delivery_city'],
-                'state': data.get('delivery_state') or '',
+                'area_name': data.get('delivery_state') or '',
                 'postal_code': data.get('delivery_postal_code') or '',
                 'delivery_date': data['delivery_date'],
                 'delivery_time_slot': data.get('delivery_time_slot') or '',

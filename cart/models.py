@@ -732,11 +732,10 @@ class DeliveryInfo(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
     city = models.CharField(max_length=100, blank=True)
-    state = models.CharField(
-        max_length=20,
-        choices=NIGERIA_STATES,
+    area_name = models.CharField(
+        max_length=100,
         blank=True,
-        help_text="State for delivery fee calculation"
+        help_text="Delivery zone area name — matched against active DeliveryZone entries for fee calculation"
     )
     postal_code = models.CharField(max_length=20, blank=True)
 
@@ -761,6 +760,7 @@ class DeliveryInfo(models.Model):
     def __str__(self):
         return f"Delivery for Cart {self.cart_id}"
 
+
 class SavedDeliveryInfo(models.Model):
     """
     Persistent delivery details tied to a user account, used to prefill
@@ -777,7 +777,7 @@ class SavedDeliveryInfo(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
     city = models.CharField(max_length=100, blank=True)
-    state = models.CharField(max_length=20, choices=NIGERIA_STATES, blank=True)
+    area_name = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=20, blank=True)
 
     updated_at = models.DateTimeField(auto_now=True)

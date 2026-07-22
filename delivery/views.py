@@ -23,14 +23,14 @@ class DeliveryZoneListView(generics.ListAPIView):
     GET /api/delivery/zones/
 
     List all active delivery zones. Used by the frontend to populate
-    the delivery state dropdown at checkout — only states with an
-    active zone are offered as delivery options.
+    the delivery area dropdown at checkout — only areas added and
+    activated by admin are offered as delivery options.
     """
     permission_classes = [permissions.AllowAny]
     serializer_class = DeliveryZoneListSerializer
 
     def get_queryset(self):
-        return DeliveryZone.objects.filter(status='active').order_by('state')
+        return DeliveryZone.objects.filter(status='active').order_by('area_name')
 
 
 class DeliveryZoneDetailView(generics.RetrieveAPIView):
@@ -50,7 +50,7 @@ class CalculateDeliveryFeeView(APIView):
     """
     POST /api/delivery/calculate/
 
-    Calculate delivery fee based on state. Pickup orders always
+    Calculate delivery fee based on area. Pickup orders always
     return a fee of 0 with no zone lookup.
     """
     permission_classes = [permissions.AllowAny]
@@ -60,8 +60,8 @@ class CalculateDeliveryFeeView(APIView):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
-        result = DeliveryService.calculate_delivery_fee_by_state(
-            state=data['state'],
+        result = DeliveryService.calculate_delivery_fee(
+            area_name=data['area_name'],
             is_pickup=data.get('is_pickup', False)
         )
 
@@ -104,9 +104,10 @@ class AdminDeliveryZoneListView(generics.ListCreateAPIView):
     GET/POST /api/delivery/admin/zones/
 
     List all delivery zones or create a new one (admin only).
+    Admin can freely add any area name — no predefined list.
     """
     permission_classes = [permissions.IsAdminUser]
-    queryset = DeliveryZone.objects.all().order_by('state')
+    queryset = DeliveryZone.objects.all().order_by('area_name')
     serializer_class = DeliveryZoneSerializer
 
 

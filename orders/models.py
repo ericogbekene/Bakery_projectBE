@@ -1003,7 +1003,7 @@ def create_order_from_cart(cart, customer_data, fulfillment_data, payment_method
         customer_data: Dict with 'name', 'email', 'phone'
         fulfillment_data: Dict with delivery or pickup details, depending
             on cart.fulfillment_type:
-              - delivery: address, city, state, postal_code, delivery_date,
+              - delivery: address, city, area_name, postal_code, delivery_date,
                 delivery_time_slot, delivery_zone, delivery_fee, special_instructions
               - pickup: pickup_date, pickup_time_slot, special_instructions
         payment_method: Optional payment method
@@ -1083,7 +1083,7 @@ def create_order_from_cart(cart, customer_data, fulfillment_data, payment_method
                         'phone': customer_data['phone'],
                         'address': fulfillment_data['address'],
                         'city': fulfillment_data['city'],
-                        'state': fulfillment_data.get('state', ''),
+                        'area_name': fulfillment_data.get('area_name', ''),
                         'postal_code': fulfillment_data.get('postal_code', ''),
                     }
                 )
