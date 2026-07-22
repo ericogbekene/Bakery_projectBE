@@ -788,3 +788,5 @@ class SavedDeliveryInfo(models.Model):
 
     def __str__(self):
         return f"Saved delivery info for {self.user}"
+
+# clean file

@@ -9,7 +9,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from decimal import Decimal
 
-from orders.models import Order, OrderHistory, OrderPayment
+from orders.models import Order, OrderHistory
 from orders.emails import (
     send_order_confirmation,
     send_order_status_update,
