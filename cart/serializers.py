@@ -220,12 +220,11 @@ class DeliveryInfoSerializer(serializers.ModelSerializer):
         model = DeliveryInfo
         fields = [
             'id', 'full_name', 'email', 'phone',
-            'address', 'city', 'state', 'postal_code',
+            'address', 'city', 'area_name', 'postal_code',
             'delivery_date', 'delivery_time_slot',
             'calculated_fee', 'special_instructions'
         ]
         read_only_fields = ['id', 'calculated_fee']
-
 
 class GuestCartMergeSerializer(serializers.Serializer):
     """

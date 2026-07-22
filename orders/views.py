@@ -9,7 +9,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from decimal import Decimal
 
-from orders.models import Order, OrderHistory, OrderPayment
+from orders.models import Order, OrderHistory
 from orders.emails import (
     send_order_confirmation,
     send_order_status_update,
@@ -121,11 +121,10 @@ class CreateOrderView(APIView):
 
         # ── Build fulfillment_data based on cart's fulfillment type ───────
         if cart.fulfillment_type == 'delivery':
-            delivery_info, _ = DeliveryInfo.objects.get_or_create(cart=cart)
             fulfillment_data = {
                 'address': data['delivery_address'],
                 'city': data['delivery_city'],
-                'state': data.get('delivery_state') or '',
+                'area_name': data.get('delivery_state') or '',
                 'postal_code': data.get('delivery_postal_code') or '',
                 'delivery_date': data['delivery_date'],
                 'delivery_time_slot': data.get('delivery_time_slot') or '',

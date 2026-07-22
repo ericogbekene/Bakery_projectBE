@@ -177,7 +177,7 @@ class CartItemAddonAdmin(admin.ModelAdmin):
 @admin.register(DeliveryInfo)
 class DeliveryInfoAdmin(admin.ModelAdmin):
     list_display = ['id', 'cart', 'full_name', 'phone', 'delivery_date', 'calculated_fee']
-    list_filter = ['delivery_date', 'state', 'city']
+    list_filter = ['delivery_date', 'area_name', 'city']
     search_fields = ['full_name', 'email', 'phone', 'address']
     readonly_fields = ['created_at', 'updated_at']
     
@@ -189,7 +189,7 @@ class DeliveryInfoAdmin(admin.ModelAdmin):
             'fields': ['full_name', 'email', 'phone']
         }),
         ('Delivery Address', {
-            'fields': ['address', 'city', 'state', 'postal_code']
+            'fields': ['address', 'city', 'area_name', 'postal_code']
         }),
         ('Delivery Schedule', {
             'fields': ['delivery_date', 'delivery_time_slot']

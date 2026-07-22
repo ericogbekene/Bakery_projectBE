@@ -398,22 +398,20 @@ class DeliveryInfoView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        if delivery_info.state:
-            try:
-                result = DeliveryService.calculate_delivery_fee_by_state(
-                    state=delivery_info.state,
-                    is_pickup=(cart.fulfillment_type == 'pickup')
-                )
-                if result.get('available'):
-                    delivery_info.calculated_fee = result['fee']
-                    delivery_info.save()
-            except Exception:
-                pass
+        if delivery_info.area_name:
+            result = DeliveryService.calculate_delivery_fee(
+                area_name=delivery_info.area_name,
+                is_pickup=(cart.fulfillment_type == 'pickup')
+            )
+            if result.get('available'):
+                delivery_info.calculated_fee = result['fee']
+                delivery_info.save(update_fields=['calculated_fee'])
 
         return Response({
             'message': 'Delivery information saved successfully.',
             'delivery_info': DeliveryInfoSerializer(delivery_info).data
         })
+    
 
 # ============================================================================
 # CART FULFILLMENT TYPE VIEW
@@ -515,6 +513,6 @@ class SavedDeliveryInfoView(APIView):
             'phone': saved.phone,
             'address': saved.address,
             'city': saved.city,
-            'state': saved.state,
+            'area_name': saved.area_name,
             'postal_code': saved.postal_code,
         })
